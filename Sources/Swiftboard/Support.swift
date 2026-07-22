@@ -43,7 +43,7 @@ enum Log {
                 withIntermediateDirectories: true,
             )
             if !fm.fileExists(atPath: url.path) {
-                fm.createFile(atPath: url.path, contents: nil)
+                _ = fm.createFile(atPath: url.path, contents: nil)
             }
             let handle = try FileHandle(forWritingTo: url)
             handle.seekToEndOfFile()

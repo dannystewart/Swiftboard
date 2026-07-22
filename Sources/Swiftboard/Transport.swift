@@ -58,7 +58,7 @@ enum Transport {
         frame.append(contentsOf: payload)
 
         if self.sendAll(fd, frame) {
-            Log.debug("Sent \(payload.count)-byte frame to \(host):\(port).")
+            Log.info("Sent \(payload.count)-byte frame to \(host):\(port).")
         } else {
             Log.warn("Failed while sending to \(host):\(port).")
         }
