@@ -8,6 +8,9 @@ let package = Package(
     platforms: [
         .macOS(.v26),
     ],
+    products: [
+        .executable(name: "swiftboard", targets: ["Swiftboard"]),
+    ],
     targets: [
         // C shim over stb_image / stb_image_write, used only on Windows to
         // convert between the clipboard's DIB and the PNG we send on the wire.
