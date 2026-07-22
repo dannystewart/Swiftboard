@@ -1,16 +1,16 @@
 import Foundation
 import Synchronization
 
-// Coordinates the local clipboard, the peer transport, and the dedup state.
-//
-// Everything that touches the OS clipboard runs inside `state.withLock`, which
-// does double duty: it protects the dedup fields AND serializes clipboard
-// access between the poll thread and the receive thread (the Windows clipboard
-// in particular is a single global object that dislikes concurrent access).
+/// Coordinates the local clipboard, the peer transport, and the dedup state.
+///
+/// Everything that touches the OS clipboard runs inside `state.withLock`, which
+/// does double duty: it protects the dedup fields AND serializes clipboard
+/// access between the poll thread and the receive thread (the Windows clipboard
+/// in particular is a single global object that dislikes concurrent access).
 final class SyncEngine: Sendable {
     private struct State {
-        var lastToken: Int?
-        var lastHash: String?
+        var lastToken: Int? = nil
+        var lastHash: String? = nil
     }
 
     private let backend: any ClipboardBackend
@@ -21,7 +21,7 @@ final class SyncEngine: Sendable {
     init(
         backend: any ClipboardBackend,
         config: Config,
-        sendToPeer: @escaping @Sendable (ClipboardItem) -> Void
+        sendToPeer: @escaping @Sendable (ClipboardItem) -> Void,
     ) {
         self.backend = backend
         self.config = config
@@ -34,20 +34,22 @@ final class SyncEngine: Sendable {
         self.state = Mutex(State(lastToken: token, lastHash: hash))
     }
 
-    // Called on each poll tick. Reads the clipboard only when the cheap change
-    // token moved, and only sends when the content hash is genuinely new.
+    /// Called on each poll tick. Reads the clipboard only when the cheap change
+    /// token moved, and only sends when the content hash is genuinely new.
     func pollLocal() {
-        let itemToSend: ClipboardItem? = state.withLock { s in
-            let token = backend.changeToken()
+        let itemToSend: ClipboardItem? = self.state.withLock { s in
+            let token = self.backend.changeToken()
             if let last = s.lastToken, last == token {
                 return nil
             }
             s.lastToken = token
 
-            guard let item = backend.read(
-                maxBytes: config.maxSizeBytes,
-                syncImages: config.syncImages
-            ) else {
+            guard
+                let item = backend.read(
+                    maxBytes: config.maxSizeBytes,
+                    syncImages: config.syncImages,
+                ) else
+            {
                 return nil
             }
             if s.lastHash == item.hash {
@@ -59,29 +61,29 @@ final class SyncEngine: Sendable {
 
         if let itemToSend {
             Log.info("Local clipboard changed: \(itemToSend.summary); sending to peer.")
-            sendToPeer(itemToSend)
+            self.sendToPeer(itemToSend)
         }
     }
 
-    // Called on the receive thread when a frame arrives from the peer.
+    /// Called on the receive thread when a frame arrives from the peer.
     func applyRemote(_ item: ClipboardItem) {
-        state.withLock { s in
+        self.state.withLock { s in
             if let existing = s.lastHash, existing == item.hash {
                 Log.debug("Ignoring peer update; identical content already present.")
                 return
             }
 
             Log.info("Received \(item.summary) from peer; updating local clipboard.")
-            backend.write(item)
+            self.backend.write(item)
 
             // Re-read so our dedup state reflects how *this* platform now sees
             // the clipboard. Prevents the poll loop from echoing it back, even
             // when re-encoding produces different bytes than the sender had.
-            let settled = backend.read(
-                maxBytes: config.maxSizeBytes,
-                syncImages: config.syncImages
+            let settled = self.backend.read(
+                maxBytes: self.config.maxSizeBytes,
+                syncImages: self.config.syncImages,
             )
-            s.lastToken = backend.changeToken()
+            s.lastToken = self.backend.changeToken()
             s.lastHash = settled?.hash ?? item.hash
         }
     }

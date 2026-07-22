@@ -29,5 +29,5 @@ let package = Package(
                 .enableUpcomingFeature("ApproachableConcurrency"),
             ],
         ),
-    ]
+    ],
 )

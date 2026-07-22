@@ -1,18 +1,8 @@
 import Foundation
 
+// MARK: - Config
+
 struct Config: Sendable {
-    // Set from the command line. A nil peer means discover it via UDP broadcast.
-    var peerHost: String?
-    var port: UInt16 = 8765
-    var verbose: Bool = false
-
-    // Fixed defaults. Not exposed as flags on purpose; change them here if needed.
-    var maxSizeMB: Int = 10
-    var pollIntervalMS: Int = 250
-    var syncImages: Bool = true
-
-    var maxSizeBytes: Int { maxSizeMB * 1024 * 1024 }
-
     static let usage = """
     Swiftboard - sync the clipboard between two machines on the same LAN.
 
@@ -30,10 +20,25 @@ struct Config: Sendable {
 
     Run it on both machines. With no peer given, they discover each other.
     """
+
+    // Set from the command line. A nil peer means discover it via UDP broadcast.
+    var peerHost: String? = nil
+    var port: UInt16 = 8765
+    var verbose: Bool = false
+
+    // Fixed defaults. Not exposed as flags on purpose; change them here if needed.
+    var maxSizeMB: Int = 10
+    var pollIntervalMS: Int = 250
+    var syncImages: Bool = true
+
+    var maxSizeBytes: Int { self.maxSizeMB * 1024 * 1024 }
 }
+
+// MARK: - ArgError
 
 enum ArgError: Error, CustomStringConvertible {
     case message(String)
+
     var description: String {
         switch self {
         case let .message(text): text
@@ -41,8 +46,10 @@ enum ArgError: Error, CustomStringConvertible {
     }
 }
 
+// MARK: - ArgParser
+
 enum ArgParser {
-    // Returns nil when help was requested (caller should print usage and exit 0).
+    /// Returns nil when help was requested (caller should print usage and exit 0).
     static func parse(_ arguments: [String]) throws -> Config? {
         var peerHost: String?
         var port: UInt16 = 8765
@@ -55,14 +62,17 @@ enum ArgParser {
             switch arg {
             case "-h", "--help":
                 return nil
+
             case "--port":
                 let raw = try value(after: arg, args: args, index: &index)
                 guard let parsed = UInt16(raw) else {
                     throw ArgError.message("--port must be a number between 0 and 65535")
                 }
                 port = parsed
+
             case "--verbose":
                 verbose = true
+
             default:
                 if arg.hasPrefix("-") {
                     throw ArgError.message("unknown argument: \(arg)")

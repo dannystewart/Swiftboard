@@ -58,7 +58,7 @@ struct Swiftboard {
         }
 
         Log.info(
-            "Swiftboard started on port \(port), images \(config.syncImages ? "on" : "off"). Press Ctrl+C to stop."
+            "Swiftboard started on port \(port), images \(config.syncImages ? "on" : "off"). Press Ctrl+C to stop.",
         )
 
         let interval = Double(config.pollIntervalMS) / 1000.0

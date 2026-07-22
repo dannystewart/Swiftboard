@@ -1,21 +1,23 @@
 import Foundation
 
 #if os(Windows)
-import WinSDK
+    import WinSDK
 #else
-import Darwin
+    import Darwin
 #endif
 
-// Length-prefixed framing: a 4-byte big-endian payload length followed by the
-// JSON bytes. One frame per clipboard update; the sender opens a fresh
-// connection per update and closes it, which keeps the protocol stateless.
+// MARK: - Transport
+
+/// Length-prefixed framing: a 4-byte big-endian payload length followed by the
+/// JSON bytes. One frame per clipboard update; the sender opens a fresh
+/// connection per update and closes it, which keeps the protocol stateless.
 enum Transport {
-    // Runs the accept loop forever on the calling thread. `onReceive` is invoked
-    // on this same thread for each received frame.
+    /// Runs the accept loop forever on the calling thread. `onReceive` is invoked
+    /// on this same thread for each received frame.
     static func runServer(
         port: UInt16,
         maxFrameBytes: Int,
-        onReceive: @escaping (Data) -> Void
+        onReceive: @escaping (Data) -> Void,
     ) {
         Sock.prepare()
 
@@ -31,13 +33,13 @@ enum Transport {
                 Log.debug("accept() failed; continuing.")
                 continue
             }
-            handleConnection(clientFD, maxFrameBytes: maxFrameBytes, onReceive: onReceive)
+            self.handleConnection(clientFD, maxFrameBytes: maxFrameBytes, onReceive: onReceive)
             Sock.close(clientFD)
         }
     }
 
-    // Connects to the peer, sends one frame, and closes. Best-effort: logs and
-    // returns on any failure so a sleeping/offline peer never blocks syncing.
+    /// Connects to the peer, sends one frame, and closes. Best-effort: logs and
+    /// returns on any failure so a sleeping/offline peer never blocks syncing.
     static func sendFrame(to host: String, port: UInt16, payload: Data) {
         Sock.prepare()
 
@@ -55,7 +57,7 @@ enum Transport {
         frame.append(UInt8(length & 0xFF))
         frame.append(contentsOf: payload)
 
-        if sendAll(fd, frame) {
+        if self.sendAll(fd, frame) {
             Log.debug("Sent \(payload.count)-byte frame to \(host):\(port).")
         } else {
             Log.warn("Failed while sending to \(host):\(port).")
@@ -67,7 +69,7 @@ enum Transport {
     private static func handleConnection(
         _ fd: SocketFD,
         maxFrameBytes: Int,
-        onReceive: (Data) -> Void
+        onReceive: (Data) -> Void,
     ) {
         guard let header = recvExactly(fd, count: 4) else { return }
         let length =
@@ -140,22 +142,21 @@ enum Transport {
 
     private static func sendAll(_ fd: SocketFD, _ bytes: [UInt8]) -> Bool {
         var sent = 0
-        let ok = bytes.withUnsafeBytes { raw -> Bool in
+        return bytes.withUnsafeBytes { raw -> Bool in
             let base = raw.baseAddress!
             while sent < bytes.count {
                 let remaining = bytes.count - sent
                 #if os(Windows)
-                let n = send(fd, base.advanced(by: sent).assumingMemoryBound(to: CChar.self),
-                             Int32(remaining), 0)
+                    let n = send(fd, base.advanced(by: sent).assumingMemoryBound(to: CChar.self),
+                                 Int32(remaining), 0)
                 #else
-                let n = send(fd, base.advanced(by: sent), remaining, 0)
+                    let n = send(fd, base.advanced(by: sent), remaining, 0)
                 #endif
                 if n <= 0 { return false }
                 sent += Int(n)
             }
             return true
         }
-        return ok
     }
 
     private static func recvExactly(_ fd: SocketFD, count: Int) -> [UInt8]? {
@@ -166,10 +167,10 @@ enum Transport {
             while received < count {
                 let remaining = count - received
                 #if os(Windows)
-                let n = recv(fd, base.advanced(by: received).assumingMemoryBound(to: CChar.self),
-                             Int32(remaining), 0)
+                    let n = recv(fd, base.advanced(by: received).assumingMemoryBound(to: CChar.self),
+                                 Int32(remaining), 0)
                 #else
-                let n = recv(fd, base.advanced(by: received), remaining, 0)
+                    let n = recv(fd, base.advanced(by: received), remaining, 0)
                 #endif
                 if n <= 0 { return false }
                 received += Int(n)

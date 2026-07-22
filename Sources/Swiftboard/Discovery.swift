@@ -2,24 +2,26 @@ import Foundation
 import Synchronization
 
 #if os(Windows)
-import WinSDK
+    import WinSDK
 #else
-import Darwin
+    import Darwin
 #endif
 
-// Holds the current peer address. The send path reads it live, so a peer that
-// is discovered (or whose IP changes) is picked up without a restart.
+// MARK: - PeerRegistry
+
+/// Holds the current peer address. The send path reads it live, so a peer that
+/// is discovered (or whose IP changes) is picked up without a restart.
 final class PeerRegistry: Sendable {
-    private let host = Mutex<String?>(nil)
+    private let host: Mutex<String?> = .init(nil)
 
     func current() -> String? {
-        host.withLock { $0 }
+        self.host.withLock { $0 }
     }
 
-    // Returns true if the peer address actually changed.
+    /// Returns true if the peer address actually changed.
     @discardableResult
     func update(_ newHost: String) -> Bool {
-        host.withLock { existing in
+        self.host.withLock { existing in
             if existing == newHost { return false }
             existing = newHost
             return true
@@ -27,9 +29,11 @@ final class PeerRegistry: Sendable {
     }
 }
 
-// UDP broadcast peer discovery. Each instance periodically shouts a beacon
-// carrying a per-run UUID and listens for the other's shout; a beacon with a
-// different UUID reveals the peer's IP (read from the source address).
+// MARK: - Discovery
+
+/// UDP broadcast peer discovery. Each instance periodically shouts a beacon
+/// carrying a per-run UUID and listens for the other's shout; a beacon with a
+/// different UUID reveals the peer's IP (read from the source address).
 enum Discovery {
     private static let beaconPrefix = "SWIFTBOARD/1 "
     private static let interval: TimeInterval = 3
@@ -44,8 +48,8 @@ enum Discovery {
         }
 
         Log.info("Auto-discovery active: broadcasting on UDP port \(port).")
-        Thread.detachNewThread { listenLoop(fd: fd, myID: myID, registry: registry) }
-        Thread.detachNewThread { broadcastLoop(fd: fd, port: port, myID: myID) }
+        Thread.detachNewThread { self.listenLoop(fd: fd, myID: myID, registry: registry) }
+        Thread.detachNewThread { self.broadcastLoop(fd: fd, port: port, myID: myID) }
     }
 
     private static func makeSocket(port: UInt16) -> SocketFD? {
@@ -82,20 +86,22 @@ enum Discovery {
         }
         let message = Array((beaconPrefix + myID).utf8)
         while true {
-            sendBeacon(fd: fd, message: message, dest: dest)
-            Thread.sleep(forTimeInterval: interval)
+            self.sendBeacon(fd: fd, message: message, dest: dest)
+            Thread.sleep(forTimeInterval: self.interval)
         }
     }
 
-    // Resolve 255.255.255.255:port once and keep the raw sockaddr bytes to reuse.
+    /// Resolve 255.255.255.255:port once and keep the raw sockaddr bytes to reuse.
     private static func resolveBroadcast(port: UInt16) -> (bytes: [UInt8], len: Int)? {
         var hints = addrinfo()
         hints.ai_family = AF_INET
         hints.ai_socktype = Sock.dgram
 
         var result: UnsafeMutablePointer<addrinfo>?
-        guard getaddrinfo("255.255.255.255", String(port), &hints, &result) == 0,
-              let info = result, let addr = info.pointee.ai_addr else {
+        guard
+            getaddrinfo("255.255.255.255", String(port), &hints, &result) == 0,
+            let info = result, let addr = info.pointee.ai_addr else
+        {
             return nil
         }
         defer { freeaddrinfo(result) }
@@ -113,10 +119,10 @@ enum Discovery {
             let sa = addrRaw.baseAddress!.assumingMemoryBound(to: sockaddr.self)
             message.withUnsafeBytes { msgRaw in
                 #if os(Windows)
-                _ = sendto(fd, msgRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
-                           Int32(msgRaw.count), 0, sa, Int32(dest.len))
+                    _ = sendto(fd, msgRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
+                               Int32(msgRaw.count), 0, sa, Int32(dest.len))
                 #else
-                _ = sendto(fd, msgRaw.baseAddress, msgRaw.count, 0, sa, socklen_t(dest.len))
+                    _ = sendto(fd, msgRaw.baseAddress, msgRaw.count, 0, sa, socklen_t(dest.len))
                 #endif
             }
         }
@@ -128,15 +134,15 @@ enum Discovery {
         while true {
             var buffer = [UInt8](repeating: 0, count: 512)
             var from = [UInt8](repeating: 0, count: 128) // room for sockaddr_storage
-            let received = receive(fd: fd, buffer: &buffer, from: &from)
+            let received = self.receive(fd: fd, buffer: &buffer, from: &from)
             guard received > 0 else {
                 Thread.sleep(forTimeInterval: 0.5) // avoid a hot loop on errors
                 continue
             }
 
-            let text = String(decoding: buffer[0..<received], as: UTF8.self)
-            guard text.hasPrefix(beaconPrefix) else { continue }
-            let theirID = String(text.dropFirst(beaconPrefix.count))
+            let text = String(decoding: buffer[0 ..< received], as: UTF8.self)
+            guard text.hasPrefix(self.beaconPrefix) else { continue }
+            let theirID = String(text.dropFirst(self.beaconPrefix.count))
             if theirID == myID { continue } // our own broadcast echoing back
 
             // The IPv4 address sits at byte offset 4 of the sockaddr on both
@@ -154,12 +160,12 @@ enum Discovery {
             from.withUnsafeMutableBytes { fromRaw in
                 let sa = fromRaw.baseAddress!.assumingMemoryBound(to: sockaddr.self)
                 #if os(Windows)
-                var fromLen = Int32(fromRaw.count)
-                let n = recvfrom(fd, bufRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
-                                 Int32(bufRaw.count), 0, sa, &fromLen)
+                    var fromLen = Int32(fromRaw.count)
+                    let n = recvfrom(fd, bufRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
+                                     Int32(bufRaw.count), 0, sa, &fromLen)
                 #else
-                var fromLen = socklen_t(fromRaw.count)
-                let n = recvfrom(fd, bufRaw.baseAddress, bufRaw.count, 0, sa, &fromLen)
+                    var fromLen = socklen_t(fromRaw.count)
+                    let n = recvfrom(fd, bufRaw.baseAddress, bufRaw.count, 0, sa, &fromLen)
                 #endif
                 return Int(n)
             }
