@@ -24,16 +24,6 @@ let package = Package(
             swiftSettings: [
                 .enableUpcomingFeature("ApproachableConcurrency"),
             ],
-            linkerSettings: [
-                // Link as a GUI-subsystem app on Windows so no console window is
-                // ever created (headless startup). /ENTRY:mainCRTStartup keeps the
-                // normal `main` entry point that @main provides, rather than the
-                // WinMain the WINDOWS subsystem would otherwise expect.
-                .unsafeFlags(
-                    ["-Xlinker", "/SUBSYSTEM:WINDOWS", "-Xlinker", "/ENTRY:mainCRTStartup"],
-                    .when(platforms: [.windows])
-                ),
-            ],
         ),
         .testTarget(
             name: "SwiftboardTests",
