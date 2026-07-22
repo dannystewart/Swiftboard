@@ -50,3 +50,22 @@ import Testing
         _ = try ArgParser.parse(["swiftboard", "192.168.1.50", "192.168.1.51"])
     }
 }
+
+@Test func `registry reports discovery then heartbeat`() {
+    let registry = PeerRegistry()
+    #expect(registry.markSeen("192.168.1.9") == .discovered)
+    #expect(registry.current() == "192.168.1.9")
+    #expect(registry.markSeen("192.168.1.9") == .stillPresent)
+}
+
+@Test func `registry reports offline then reconnect`() {
+    let registry = PeerRegistry()
+    _ = registry.markSeen("192.168.1.9")
+
+    // A negative timeout forces the staleness check to fire immediately.
+    #expect(registry.markStaleIfNeeded(timeout: -1) == true)
+    // Only the first transition to offline reports true.
+    #expect(registry.markStaleIfNeeded(timeout: -1) == false)
+    // Coming back is a reconnect, not a fresh discovery.
+    #expect(registry.markSeen("192.168.1.9") == .reconnected)
+}

@@ -26,7 +26,7 @@ struct Swiftboard {
 
         let registry = PeerRegistry()
         if let staticPeer = config.peerHost {
-            registry.update(staticPeer)
+            registry.setStatic(staticPeer)
             Log.info("Using static peer \(staticPeer):\(port).")
         } else {
             Discovery.start(port: port, registry: registry)

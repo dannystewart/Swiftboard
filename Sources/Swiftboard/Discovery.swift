@@ -9,21 +9,65 @@ import Synchronization
 
 // MARK: - PeerRegistry
 
-/// Holds the current peer address. The send path reads it live, so a peer that
-/// is discovered (or whose IP changes) is picked up without a restart.
-final class PeerRegistry: Sendable {
-    private let host: Mutex<String?> = .init(nil)
+/// What a fresh beacon told us about the peer, so callers can log transitions.
+enum PeerEvent: Sendable, Equatable {
+    case discovered // first sighting, or the peer's IP changed
+    case reconnected // a peer we'd marked offline is back
+    case stillPresent // routine heartbeat, nothing to announce
+}
 
-    func current() -> String? {
-        self.host.withLock { $0 }
+/// Holds the current peer address and liveness. The send path reads `current()`
+/// live, so a peer that is discovered (or whose IP changes) is picked up without
+/// a restart. Beacons double as a heartbeat: `markSeen` refreshes last-seen and
+/// a watchdog calls `markStaleIfNeeded` to notice when they stop arriving.
+final class PeerRegistry: Sendable {
+    private struct State {
+        var host: String?
+        var lastSeen: Date?
+        var online = false
     }
 
-    /// Returns true if the peer address actually changed.
-    @discardableResult
-    func update(_ newHost: String) -> Bool {
-        self.host.withLock { existing in
-            if existing == newHost { return false }
-            existing = newHost
+    private let state: Mutex<State> = .init(State())
+
+    func current() -> String? {
+        self.state.withLock { $0.host }
+    }
+
+    /// Seed a peer supplied on the command line (static mode, no beacons).
+    func setStatic(_ host: String) {
+        self.state.withLock { state in
+            state.host = host
+            state.online = true
+        }
+    }
+
+    /// Record a beacon from `host` and report whether it's worth announcing.
+    func markSeen(_ host: String) -> PeerEvent {
+        self.state.withLock { state in
+            let event: PeerEvent
+            if state.host != host {
+                event = .discovered
+            } else if !state.online {
+                event = .reconnected
+            } else {
+                event = .stillPresent
+            }
+            state.host = host
+            state.lastSeen = Date()
+            state.online = true
+            return event
+        }
+    }
+
+    /// Returns true exactly once, when the peer transitions to offline.
+    func markStaleIfNeeded(timeout: TimeInterval) -> Bool {
+        self.state.withLock { state in
+            guard state.online, let last = state.lastSeen,
+                  Date().timeIntervalSince(last) > timeout
+            else {
+                return false
+            }
+            state.online = false
             return true
         }
     }
@@ -50,6 +94,21 @@ enum Discovery {
         Log.info("Auto-discovery active: broadcasting on UDP port \(port).")
         Thread.detachNewThread { self.listenLoop(fd: fd, myID: myID, registry: registry) }
         Thread.detachNewThread { self.broadcastLoop(fd: fd, port: port, myID: myID) }
+        Thread.detachNewThread { self.livenessLoop(registry: registry) }
+    }
+
+    // MARK: - Liveness watchdog
+
+    /// Missing this many seconds of beacons (~3 intervals) means the peer is gone.
+    private static let livenessTimeout: TimeInterval = 10
+
+    private static func livenessLoop(registry: PeerRegistry) {
+        while true {
+            Thread.sleep(forTimeInterval: 2)
+            if registry.markStaleIfNeeded(timeout: self.livenessTimeout) {
+                Log.info("Peer went offline (no beacon for \(Int(self.livenessTimeout))s).")
+            }
+        }
     }
 
     private static func makeSocket(port: UInt16) -> SocketFD? {
@@ -149,8 +208,13 @@ enum Discovery {
             // platforms: Darwin's sin_len + sin_family (1+1) occupies the same
             // two bytes as the 2-byte sin_family elsewhere, and sin_port is next.
             let ip = "\(from[4]).\(from[5]).\(from[6]).\(from[7])"
-            if registry.update(ip) {
+            switch registry.markSeen(ip) {
+            case .discovered:
                 Log.info("Discovered peer at \(ip).")
+            case .reconnected:
+                Log.info("Peer back online at \(ip).")
+            case .stillPresent:
+                Log.debug("Heartbeat from \(ip).")
             }
         }
     }
