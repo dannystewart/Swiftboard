@@ -27,7 +27,10 @@ enum Log {
     static func log(_ level: Level, _ message: String) {
         guard level.rawValue >= self.minLevel.rawValue else { return }
         let stamp = self.timestamp()
-        FileHandle.standardError.write(Data("\(stamp) [\(level.label)] \(message)\n".utf8))
+        let line = Data("\(stamp) [\(level.label)] \(message)\n".utf8)
+        // Use the throwing variant with try? so we no-op instead of trapping when
+        // there is no valid stderr (e.g. the headless Windows GUI-subsystem build).
+        try? FileHandle.standardError.write(contentsOf: line)
     }
 
     static func debug(_ message: @autoclosure () -> String) { self.log(.debug, message()) }
