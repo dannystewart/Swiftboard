@@ -2,20 +2,8 @@ import Foundation
 
 #if os(Windows)
 import WinSDK
-typealias SocketFD = SOCKET
-// INVALID_SOCKET is a cast-style C macro that Swift's importer doesn't surface,
-// so compute the equivalent (all bits set) directly. SOCKET is an unsigned type.
-private let invalidSocketFD: SOCKET = ~0
-
-// Initialized once, lazily and thread-safely, before any socket use.
-private let winsockReady: Bool = {
-    var data = WSADATA()
-    return WSAStartup(WORD(0x0202), &data) == 0
-}()
 #else
 import Darwin
-typealias SocketFD = Int32
-private let invalidSocketFD: Int32 = -1
 #endif
 
 // Length-prefixed framing: a 4-byte big-endian payload length followed by the
@@ -29,7 +17,7 @@ enum Transport {
         maxFrameBytes: Int,
         onReceive: @escaping (Data) -> Void
     ) {
-        prepare()
+        Sock.prepare()
 
         guard let listenFD = makeBoundListener(port: port) else {
             Log.error("Failed to bind listener on port \(port). Is another instance running?")
@@ -44,20 +32,20 @@ enum Transport {
                 continue
             }
             handleConnection(clientFD, maxFrameBytes: maxFrameBytes, onReceive: onReceive)
-            closeSocket(clientFD)
+            Sock.close(clientFD)
         }
     }
 
     // Connects to the peer, sends one frame, and closes. Best-effort: logs and
     // returns on any failure so a sleeping/offline peer never blocks syncing.
     static func sendFrame(to host: String, port: UInt16, payload: Data) {
-        prepare()
+        Sock.prepare()
 
         guard let fd = connectTo(host: host, port: port) else {
             Log.warn("Could not reach peer at \(host):\(port); update not delivered.")
             return
         }
-        defer { closeSocket(fd) }
+        defer { Sock.close(fd) }
 
         var frame = [UInt8]()
         let length = UInt32(payload.count)
@@ -97,16 +85,10 @@ enum Transport {
 
     // MARK: - Socket setup
 
-    private static func prepare() {
-        #if os(Windows)
-        _ = winsockReady
-        #endif
-    }
-
     private static func makeBoundListener(port: UInt16) -> SocketFD? {
         var hints = addrinfo()
         hints.ai_family = AF_INET
-        hints.ai_socktype = sockStream
+        hints.ai_socktype = Sock.stream
         hints.ai_flags = AI_PASSIVE
 
         var result: UnsafeMutablePointer<addrinfo>?
@@ -118,15 +100,15 @@ enum Transport {
         let fd = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
         guard fd != invalidSocketFD else { return nil }
 
-        setReuseAddr(fd)
+        Sock.enableBoolOption(fd, SO_REUSEADDR)
 
-        let bindResult = bind(fd, info.pointee.ai_addr, addrLen(info.pointee.ai_addrlen))
+        let bindResult = bind(fd, info.pointee.ai_addr, Sock.addrLen(info.pointee.ai_addrlen))
         guard bindResult == 0 else {
-            closeSocket(fd)
+            Sock.close(fd)
             return nil
         }
         guard listen(fd, 8) == 0 else {
-            closeSocket(fd)
+            Sock.close(fd)
             return nil
         }
         return fd
@@ -135,7 +117,7 @@ enum Transport {
     private static func connectTo(host: String, port: UInt16) -> SocketFD? {
         var hints = addrinfo()
         hints.ai_family = AF_INET
-        hints.ai_socktype = sockStream
+        hints.ai_socktype = Sock.stream
 
         var result: UnsafeMutablePointer<addrinfo>?
         guard getaddrinfo(host, String(port), &hints, &result) == 0, let info = result else {
@@ -146,9 +128,9 @@ enum Transport {
         let fd = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
         guard fd != invalidSocketFD else { return nil }
 
-        setSendTimeout(fd, seconds: 3)
-        guard connect(fd, info.pointee.ai_addr, addrLen(info.pointee.ai_addrlen)) == 0 else {
-            closeSocket(fd)
+        Sock.setSendTimeout(fd, seconds: 3)
+        guard connect(fd, info.pointee.ai_addr, Sock.addrLen(info.pointee.ai_addrlen)) == 0 else {
+            Sock.close(fd)
             return nil
         }
         return fd
@@ -195,60 +177,5 @@ enum Transport {
             return true
         }
         return ok ? buffer : nil
-    }
-
-    // MARK: - Platform shims
-
-    #if os(Windows)
-    private static let sockStream = Int32(SOCK_STREAM)
-    #else
-    private static let sockStream = SOCK_STREAM
-    #endif
-
-    // bind/connect want the address length as `int` on Windows (WinSock) but as
-    // socklen_t on Darwin; socklen_t may not exist in the Windows overlay.
-    #if os(Windows)
-    private static func addrLen(_ len: some BinaryInteger) -> Int32 {
-        Int32(len)
-    }
-    #else
-    private static func addrLen(_ len: some BinaryInteger) -> socklen_t {
-        socklen_t(len)
-    }
-    #endif
-
-    private static func closeSocket(_ fd: SocketFD) {
-        #if os(Windows)
-        closesocket(fd)
-        #else
-        close(fd)
-        #endif
-    }
-
-    private static func setReuseAddr(_ fd: SocketFD) {
-        var one: Int32 = 1
-        #if os(Windows)
-        withUnsafePointer(to: &one) { ptr in
-            ptr.withMemoryRebound(to: CChar.self, capacity: MemoryLayout<Int32>.size) { cptr in
-                _ = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, cptr, Int32(MemoryLayout<Int32>.size))
-            }
-        }
-        #else
-        _ = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, socklen_t(MemoryLayout<Int32>.size))
-        #endif
-    }
-
-    private static func setSendTimeout(_ fd: SocketFD, seconds: Int) {
-        #if os(Windows)
-        var ms = DWORD(seconds * 1000)
-        withUnsafePointer(to: &ms) { ptr in
-            ptr.withMemoryRebound(to: CChar.self, capacity: MemoryLayout<DWORD>.size) { cptr in
-                _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, cptr, Int32(MemoryLayout<DWORD>.size))
-            }
-        }
-        #else
-        var tv = timeval(tv_sec: seconds, tv_usec: 0)
-        _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
-        #endif
     }
 }

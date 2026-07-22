@@ -1,8 +1,8 @@
 import Foundation
 
 struct Config: Sendable {
-    // Set from the command line.
-    var peerHost: String
+    // Set from the command line. A nil peer means discover it via UDP broadcast.
+    var peerHost: String?
     var port: UInt16 = 8765
     var verbose: Bool = false
 
@@ -17,17 +17,18 @@ struct Config: Sendable {
     Swiftboard - sync the clipboard between two machines on the same LAN.
 
     USAGE:
-      swiftboard <peer> [--port <n>] [--verbose]
+      swiftboard [peer] [--port <n>] [--verbose]
 
     ARGUMENTS:
-      <peer>        IP or hostname of the other machine
+      [peer]        IP or hostname of the other machine. If omitted, Swiftboard
+                    finds the peer automatically via UDP broadcast on the LAN.
 
     OPTIONS:
-      --port <n>    TCP port to listen on and connect to (default: 8765)
+      --port <n>    TCP/UDP port to use (default: 8765)
       --verbose     Enable debug logging
       -h, --help    Show this help
 
-    Run it on both machines, each pointing at the other.
+    Run it on both machines. With no peer given, they discover each other.
     """
 }
 
@@ -72,10 +73,6 @@ enum ArgParser {
                 peerHost = arg
             }
             index += 1
-        }
-
-        guard let peerHost, !peerHost.isEmpty else {
-            throw ArgError.message("a peer host or IP is required (the other machine)")
         }
 
         var config = Config(peerHost: peerHost)

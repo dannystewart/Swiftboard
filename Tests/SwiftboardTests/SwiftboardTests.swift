@@ -30,10 +30,10 @@ import Testing
     #expect(ClipboardItem.text("same").hash == ClipboardItem.text("same").hash)
 }
 
-@Test func argParserRequiresPeer() {
-    #expect(throws: ArgError.self) {
-        _ = try ArgParser.parse(["swiftboard"])
-    }
+@Test func argParserAllowsNoPeerForDiscovery() throws {
+    let config = try #require(try ArgParser.parse(["swiftboard"]))
+    #expect(config.peerHost == nil)
+    #expect(config.port == 8765)
 }
 
 @Test func argParserReadsPositionalPeerAndPort() throws {

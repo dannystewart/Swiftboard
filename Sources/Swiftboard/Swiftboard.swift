@@ -20,19 +20,30 @@ struct Swiftboard {
         }
 
         let backend = ClipboardBackendFactory.make()
-        let peerHost = config.peerHost
         let port = config.port
         // JSON + base64 inflate an image payload by roughly 1.4x; leave headroom.
         let maxFrameBytes = config.maxSizeBytes * 2 + 4096
 
+        let registry = PeerRegistry()
+        if let staticPeer = config.peerHost {
+            registry.update(staticPeer)
+            Log.info("Using static peer \(staticPeer):\(port).")
+        } else {
+            Discovery.start(port: port, registry: registry)
+        }
+
         let engine = SyncEngine(backend: backend, config: config) { item in
+            guard let host = registry.current() else {
+                Log.debug("No peer known yet; holding clipboard update.")
+                return
+            }
             guard let payload = try? JSONEncoder().encode(item) else {
                 Log.warn("Failed to encode clipboard item; not sending.")
                 return
             }
             // Send off the poll thread so an unreachable peer never stalls polling.
             Thread.detachNewThread {
-                Transport.sendFrame(to: peerHost, port: port, payload: payload)
+                Transport.sendFrame(to: host, port: port, payload: payload)
             }
         }
 
@@ -47,7 +58,7 @@ struct Swiftboard {
         }
 
         Log.info(
-            "Swiftboard started. Peer \(peerHost):\(port), images \(config.syncImages ? "on" : "off"). Press Ctrl+C to stop."
+            "Swiftboard started on port \(port), images \(config.syncImages ? "on" : "off"). Press Ctrl+C to stop."
         )
 
         let interval = Double(config.pollIntervalMS) / 1000.0
