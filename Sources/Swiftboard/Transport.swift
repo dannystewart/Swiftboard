@@ -3,7 +3,9 @@ import Foundation
 #if os(Windows)
 import WinSDK
 typealias SocketFD = SOCKET
-private let invalidSocketFD = INVALID_SOCKET
+// INVALID_SOCKET is a cast-style C macro that Swift's importer doesn't surface,
+// so compute the equivalent (all bits set) directly. SOCKET is an unsigned type.
+private let invalidSocketFD: SOCKET = ~0
 
 // Initialized once, lazily and thread-safely, before any socket use.
 private let winsockReady: Bool = {
@@ -203,9 +205,17 @@ enum Transport {
     private static let sockStream = SOCK_STREAM
     #endif
 
+    // bind/connect want the address length as `int` on Windows (WinSock) but as
+    // socklen_t on Darwin; socklen_t may not exist in the Windows overlay.
+    #if os(Windows)
+    private static func addrLen(_ len: some BinaryInteger) -> Int32 {
+        Int32(len)
+    }
+    #else
     private static func addrLen(_ len: some BinaryInteger) -> socklen_t {
         socklen_t(len)
     }
+    #endif
 
     private static func closeSocket(_ fd: SocketFD) {
         #if os(Windows)

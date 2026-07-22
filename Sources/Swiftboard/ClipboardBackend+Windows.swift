@@ -54,7 +54,7 @@ struct WindowsClipboardBackend: ClipboardBackend {
         }
         defer { CloseClipboard() }
 
-        guard EmptyClipboard().boolValue else {
+        guard EmptyClipboard() else {
             Log.warn("EmptyClipboard failed; dropping update.")
             return
         }
@@ -73,7 +73,7 @@ struct WindowsClipboardBackend: ClipboardBackend {
 
     private func openClipboardWithRetry() -> Bool {
         for attempt in 1...5 {
-            if OpenClipboard(nil).boolValue {
+            if OpenClipboard(nil) {
                 return true
             }
             if attempt < 5 {
@@ -86,13 +86,12 @@ struct WindowsClipboardBackend: ClipboardBackend {
     // MARK: - Text
 
     private func readUnicodeText() -> String? {
-        guard IsClipboardFormatAvailable(cfUnicodeText).boolValue else { return nil }
+        guard IsClipboardFormatAvailable(cfUnicodeText) else { return nil }
         guard let handle = GetClipboardData(cfUnicodeText) else { return nil }
         guard let locked = GlobalLock(handle) else { return nil }
         defer { GlobalUnlock(handle) }
-        return locked.withMemoryRebound(to: UInt16.self, capacity: 1) { ptr in
-            String(decodingCString: ptr, as: UTF16.self)
-        }
+        let ptr = locked.assumingMemoryBound(to: UInt16.self)
+        return String(decodingCString: ptr, as: UTF16.self)
     }
 
     private func writeUnicodeText(_ text: String) {
@@ -118,9 +117,9 @@ struct WindowsClipboardBackend: ClipboardBackend {
 
     private func readImagePNG() -> Data? {
         let format: UINT
-        if IsClipboardFormatAvailable(cfDIBV5).boolValue {
+        if IsClipboardFormatAvailable(cfDIBV5) {
             format = cfDIBV5
-        } else if IsClipboardFormatAvailable(cfDIB).boolValue {
+        } else if IsClipboardFormatAvailable(cfDIB) {
             format = cfDIB
         } else {
             return nil
