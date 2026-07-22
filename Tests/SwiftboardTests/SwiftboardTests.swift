@@ -36,11 +36,17 @@ import Testing
     }
 }
 
-@Test func argParserReadsOptions() throws {
+@Test func argParserReadsPositionalPeerAndPort() throws {
     let config = try #require(
-        try ArgParser.parse(["swiftboard", "--peer", "192.168.1.50", "--port", "9000", "--no-images"])
+        try ArgParser.parse(["swiftboard", "192.168.1.50", "--port", "9000", "--verbose"])
     )
     #expect(config.peerHost == "192.168.1.50")
     #expect(config.port == 9000)
-    #expect(config.syncImages == false)
+    #expect(config.verbose == true)
+}
+
+@Test func argParserRejectsExtraPositional() {
+    #expect(throws: ArgError.self) {
+        _ = try ArgParser.parse(["swiftboard", "192.168.1.50", "192.168.1.51"])
+    }
 }

@@ -1,12 +1,15 @@
 import Foundation
 
 struct Config: Sendable {
+    // Set from the command line.
     var peerHost: String
     var port: UInt16 = 8765
+    var verbose: Bool = false
+
+    // Fixed defaults. Not exposed as flags on purpose; change them here if needed.
     var maxSizeMB: Int = 10
     var pollIntervalMS: Int = 250
     var syncImages: Bool = true
-    var verbose: Bool = false
 
     var maxSizeBytes: Int { maxSizeMB * 1024 * 1024 }
 
@@ -14,18 +17,17 @@ struct Config: Sendable {
     Swiftboard - sync the clipboard between two machines on the same LAN.
 
     USAGE:
-      swiftboard --peer <host> [options]
+      swiftboard <peer> [--port <n>] [--verbose]
+
+    ARGUMENTS:
+      <peer>        IP or hostname of the other machine
 
     OPTIONS:
-      --peer <host>        IP or hostname of the other machine (required)
-      --port <n>           TCP port to listen on and connect to (default: 8765)
-      --max-size <mb>      Maximum clipboard payload in MB (default: 10)
-      --interval <ms>      Clipboard poll interval in milliseconds (default: 250)
-      --no-images          Sync text only; ignore images
-      --verbose            Enable debug logging
-      -h, --help           Show this help
+      --port <n>    TCP port to listen on and connect to (default: 8765)
+      --verbose     Enable debug logging
+      -h, --help    Show this help
 
-    Run the same command on both machines, each pointing --peer at the other.
+    Run it on both machines, each pointing at the other.
     """
 }
 
@@ -42,7 +44,8 @@ enum ArgParser {
     // Returns nil when help was requested (caller should print usage and exit 0).
     static func parse(_ arguments: [String]) throws -> Config? {
         var peerHost: String?
-        var config = Config(peerHost: "")
+        var port: UInt16 = 8765
+        var verbose = false
 
         var index = 0
         let args = Array(arguments.dropFirst()) // drop executable path
@@ -51,40 +54,33 @@ enum ArgParser {
             switch arg {
             case "-h", "--help":
                 return nil
-            case "--peer":
-                peerHost = try value(after: arg, args: args, index: &index)
             case "--port":
                 let raw = try value(after: arg, args: args, index: &index)
-                guard let port = UInt16(raw) else {
+                guard let parsed = UInt16(raw) else {
                     throw ArgError.message("--port must be a number between 0 and 65535")
                 }
-                config.port = port
-            case "--max-size":
-                let raw = try value(after: arg, args: args, index: &index)
-                guard let mb = Int(raw), mb > 0 else {
-                    throw ArgError.message("--max-size must be a positive integer")
-                }
-                config.maxSizeMB = mb
-            case "--interval":
-                let raw = try value(after: arg, args: args, index: &index)
-                guard let ms = Int(raw), ms >= 20 else {
-                    throw ArgError.message("--interval must be at least 20 (ms)")
-                }
-                config.pollIntervalMS = ms
-            case "--no-images":
-                config.syncImages = false
+                port = parsed
             case "--verbose":
-                config.verbose = true
+                verbose = true
             default:
-                throw ArgError.message("unknown argument: \(arg)")
+                if arg.hasPrefix("-") {
+                    throw ArgError.message("unknown argument: \(arg)")
+                }
+                guard peerHost == nil else {
+                    throw ArgError.message("unexpected extra argument: \(arg)")
+                }
+                peerHost = arg
             }
             index += 1
         }
 
         guard let peerHost, !peerHost.isEmpty else {
-            throw ArgError.message("--peer is required (the other machine's IP or hostname)")
+            throw ArgError.message("a peer host or IP is required (the other machine)")
         }
-        config.peerHost = peerHost
+
+        var config = Config(peerHost: peerHost)
+        config.port = port
+        config.verbose = verbose
         return config
     }
 
