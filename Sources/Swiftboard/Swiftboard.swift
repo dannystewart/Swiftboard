@@ -19,6 +19,12 @@ struct Swiftboard {
             Log.minLevel = .debug
         }
 
+        // Do this first: the headless Windows build has no console, so the file
+        // is the only place logs can land.
+        if let logPath = Log.startFileLogging() {
+            Log.info("Logging to \(logPath).")
+        }
+
         let backend = ClipboardBackendFactory.make()
         let port = config.port
         // JSON + base64 inflate an image payload by roughly 1.4x; leave headroom.
