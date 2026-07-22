@@ -1,0 +1,4 @@
+# Vendored third-party single-header libraries (stb). Exclude from GitHub's
+# language statistics so they don't drown out the actual Swift source.
+Sources/CSTBImage/stb_image.h linguist-vendored
+Sources/CSTBImage/stb_image_write.h linguist-vendored
