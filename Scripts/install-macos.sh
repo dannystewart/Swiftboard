@@ -5,7 +5,7 @@ set -eu
 label="com.dannystewart.swiftboard"
 install_dir="$HOME/Library/Application Support/Swiftboard"
 executable="$install_dir/swiftboard"
-identity_marker="$install_dir/.signed-identity"
+identity_marker="$install_dir/.responsible-code-v1"
 plist="$HOME/Library/LaunchAgents/$label.plist"
 domain="gui/$(id -u)"
 peer="${1:-}"
@@ -49,6 +49,7 @@ fi
 codesign --force --sign "$signing_identity" --identifier "$label" --timestamp=none "$executable"
 codesign --verify --strict "$executable"
 touch "$identity_marker"
+rm -f "$install_dir/.signed-identity"
 rm -rf "$HOME/Applications/Swiftboard.app"
 if [ "$first_signed_install" = true ]; then
     tccutil reset LocalNetwork "$label" 2>/dev/null || true
@@ -61,6 +62,10 @@ cat > "$plist" <<EOF
 <dict>
     <key>Label</key>
     <string>$label</string>
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>$label</string>
+    </array>
     <key>ProgramArguments</key>
     <array>
         <string>$escaped_executable</string>
