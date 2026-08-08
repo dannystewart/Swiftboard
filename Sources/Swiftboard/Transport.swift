@@ -44,7 +44,6 @@ enum Transport {
         Sock.prepare()
 
         guard let fd = connectTo(host: host, port: port) else {
-            Log.warn("Could not reach peer at \(host):\(port); update not delivered.")
             return
         }
         defer { Sock.close(fd) }
@@ -132,11 +131,16 @@ enum Transport {
         hints.ai_socktype = Sock.stream
 
         var result: UnsafeMutablePointer<addrinfo>?
-        guard getaddrinfo(host, String(port), &hints, &result) == 0, let info = result else {
+        let resolveResult = getaddrinfo(host, String(port), &hints, &result)
+        guard resolveResult == 0, let info = result else {
+            Log.warn(
+                "Could not resolve peer \(host):\(port) (getaddrinfo error \(resolveResult)); update not delivered.",
+            )
             return nil
         }
         defer { freeaddrinfo(result) }
 
+        var lastError: Int32?
         var candidate: UnsafeMutablePointer<addrinfo>? = info
         while let current = candidate {
             let address = current.pointee
@@ -146,9 +150,19 @@ enum Transport {
                 if connect(fd, address.ai_addr, Sock.addrLen(address.ai_addrlen)) == 0 {
                     return fd
                 }
+                lastError = Sock.lastErrorCode()
                 Sock.close(fd)
+            } else {
+                lastError = Sock.lastErrorCode()
             }
             candidate = address.ai_next
+        }
+        if let lastError {
+            Log.warn(
+                "Could not connect to peer \(host):\(port) (OS error \(lastError)); update not delivered.",
+            )
+        } else {
+            Log.warn("Could not connect to peer \(host):\(port); update not delivered.")
         }
         return nil
     }
