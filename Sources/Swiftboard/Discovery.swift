@@ -82,19 +82,31 @@ enum Discovery {
     private static let beaconPrefix = "SWIFTBOARD/1 "
     private static let interval: TimeInterval = 3
 
-    static func start(port: UInt16, registry: PeerRegistry) {
+    static func start(port: UInt16, registry: PeerRegistry) -> Bool {
         Sock.prepare()
         let myID = UUID().uuidString
 
         guard let fd = makeSocket(port: port) else {
             Log.error("Discovery socket setup failed; auto-discovery unavailable. Pass a peer address instead.")
-            return
+            return false
+        }
+        guard let destination = resolveBroadcast(port: port) else {
+            Sock.close(fd)
+            Log.error("Could not resolve the discovery broadcast address.")
+            return false
+        }
+        let message = Array((beaconPrefix + myID).utf8)
+        guard self.sendBeacon(fd: fd, message: message, dest: destination) else {
+            Sock.close(fd)
+            Log.error("Could not send a discovery broadcast.")
+            return false
         }
 
         Log.info("Auto-discovery active: broadcasting on UDP port \(port).")
         Thread.detachNewThread { self.listenLoop(fd: fd, myID: myID, registry: registry) }
-        Thread.detachNewThread { self.broadcastLoop(fd: fd, port: port, myID: myID) }
+        Thread.detachNewThread { self.broadcastLoop(fd: fd, destination: destination, myID: myID) }
         Thread.detachNewThread { self.livenessLoop(registry: registry) }
+        return true
     }
 
     // MARK: - Liveness watchdog
@@ -126,8 +138,13 @@ enum Discovery {
         let fd = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
         guard fd != invalidSocketFD else { return nil }
 
-        Sock.enableBoolOption(fd, SO_REUSEADDR)
-        Sock.enableBoolOption(fd, SO_BROADCAST)
+        guard
+            Sock.enableBoolOption(fd, SO_REUSEADDR),
+            Sock.enableBoolOption(fd, SO_BROADCAST)
+        else {
+            Sock.close(fd)
+            return nil
+        }
 
         guard bind(fd, info.pointee.ai_addr, Sock.addrLen(info.pointee.ai_addrlen)) == 0 else {
             Sock.close(fd)
@@ -138,14 +155,14 @@ enum Discovery {
 
     // MARK: - Broadcasting
 
-    private static func broadcastLoop(fd: SocketFD, port: UInt16, myID: String) {
-        guard let dest = resolveBroadcast(port: port) else {
-            Log.warn("Could not resolve broadcast address; discovery beacons disabled.")
-            return
-        }
+    private static func broadcastLoop(
+        fd: SocketFD,
+        destination: (bytes: [UInt8], len: Int),
+        myID: String,
+    ) {
         let message = Array((beaconPrefix + myID).utf8)
         while true {
-            self.sendBeacon(fd: fd, message: message, dest: dest)
+            _ = self.sendBeacon(fd: fd, message: message, dest: destination)
             Thread.sleep(forTimeInterval: self.interval)
         }
     }
@@ -173,15 +190,19 @@ enum Discovery {
         return (bytes, len)
     }
 
-    private static func sendBeacon(fd: SocketFD, message: [UInt8], dest: (bytes: [UInt8], len: Int)) {
+    private static func sendBeacon(
+        fd: SocketFD,
+        message: [UInt8],
+        dest: (bytes: [UInt8], len: Int),
+    ) -> Bool {
         dest.bytes.withUnsafeBytes { addrRaw in
             let sa = addrRaw.baseAddress!.assumingMemoryBound(to: sockaddr.self)
-            message.withUnsafeBytes { msgRaw in
+            return message.withUnsafeBytes { msgRaw in
                 #if os(Windows)
-                    _ = sendto(fd, msgRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
-                               Int32(msgRaw.count), 0, sa, Int32(dest.len))
+                    return sendto(fd, msgRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
+                                  Int32(msgRaw.count), 0, sa, Int32(dest.len)) >= 0
                 #else
-                    _ = sendto(fd, msgRaw.baseAddress, msgRaw.count, 0, sa, socklen_t(dest.len))
+                    return sendto(fd, msgRaw.baseAddress, msgRaw.count, 0, sa, socklen_t(dest.len)) >= 0
                 #endif
             }
         }

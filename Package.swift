@@ -23,6 +23,13 @@ let package = Package(
             ],
             swiftSettings: [
                 .enableUpcomingFeature("ApproachableConcurrency"),
+                // Swift 6.3.2 for Windows asserts in ClosureSpecializer when
+                // optimizing this target. Keep release builds optimized while
+                // disabling only the crashing pass.
+                .unsafeFlags(
+                    ["-Xllvm", "-sil-disable-pass=ClosureSpecializer"],
+                    .when(platforms: [.windows], configuration: .release),
+                ),
             ],
             linkerSettings: [
                 // Link as a GUI-subsystem app on Windows so no console window is

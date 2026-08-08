@@ -29,6 +29,8 @@ enum Sock {
     #if os(Windows)
         static let stream: Int32 = .init(SOCK_STREAM)
         static let dgram: Int32 = .init(SOCK_DGRAM)
+        // SO_EXCLUSIVEADDRUSE is defined as a C expression that Swift cannot import.
+        static let exclusiveAddrUse: Int32 = ~SO_REUSEADDR
     #else
         static let stream = SOCK_STREAM
         static let dgram = SOCK_DGRAM
@@ -57,16 +59,16 @@ enum Sock {
     }
 
     /// Sets a boolean SO_* option (e.g. SO_REUSEADDR, SO_BROADCAST) to 1.
-    static func enableBoolOption(_ fd: SocketFD, _ option: Int32) {
+    static func enableBoolOption(_ fd: SocketFD, _ option: Int32) -> Bool {
         var one: Int32 = 1
         #if os(Windows)
-            withUnsafePointer(to: &one) { ptr in
+            return withUnsafePointer(to: &one) { ptr in
                 ptr.withMemoryRebound(to: CChar.self, capacity: MemoryLayout<Int32>.size) { cptr in
-                    _ = setsockopt(fd, SOL_SOCKET, option, cptr, Int32(MemoryLayout<Int32>.size))
+                    setsockopt(fd, SOL_SOCKET, option, cptr, Int32(MemoryLayout<Int32>.size)) == 0
                 }
             }
         #else
-            _ = setsockopt(fd, SOL_SOCKET, option, &one, socklen_t(MemoryLayout<Int32>.size))
+            return setsockopt(fd, SOL_SOCKET, option, &one, socklen_t(MemoryLayout<Int32>.size)) == 0
         #endif
     }
 

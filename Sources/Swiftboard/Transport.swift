@@ -12,23 +12,23 @@ import Foundation
 /// JSON bytes. One frame per clipboard update; the sender opens a fresh
 /// connection per update and closes it, which keeps the protocol stateless.
 enum Transport {
+    /// Creates the listener synchronously so startup cannot report success while
+    /// the receive path is unavailable. The bound socket also prevents a second
+    /// Swiftboard instance from starting on the same port.
+    static func makeListener(port: UInt16) -> SocketFD? {
+        Sock.prepare()
+        return self.makeBoundListener(port: port)
+    }
+
     /// Runs the accept loop forever on the calling thread. `onReceive` is invoked
     /// on this same thread for each received frame.
     static func runServer(
-        port: UInt16,
+        listener: SocketFD,
         maxFrameBytes: Int,
         onReceive: @escaping (Data) -> Void,
     ) {
-        Sock.prepare()
-
-        guard let listenFD = makeBoundListener(port: port) else {
-            Log.error("Failed to bind listener on port \(port). Is another instance running?")
-            return
-        }
-        Log.info("Listening for peer clipboard updates on port \(port).")
-
         while true {
-            let clientFD = accept(listenFD, nil, nil)
+            let clientFD = accept(listener, nil, nil)
             if clientFD == invalidSocketFD {
                 Log.debug("accept() failed; continuing.")
                 continue
@@ -102,7 +102,17 @@ enum Transport {
         let fd = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
         guard fd != invalidSocketFD else { return nil }
 
-        Sock.enableBoolOption(fd, SO_REUSEADDR)
+        #if os(Windows)
+            guard Sock.enableBoolOption(fd, Sock.exclusiveAddrUse) else {
+                Sock.close(fd)
+                return nil
+            }
+        #else
+            guard Sock.enableBoolOption(fd, SO_REUSEADDR) else {
+                Sock.close(fd)
+                return nil
+            }
+        #endif
 
         let bindResult = bind(fd, info.pointee.ai_addr, Sock.addrLen(info.pointee.ai_addrlen))
         guard bindResult == 0 else {

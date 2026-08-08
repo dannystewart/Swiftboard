@@ -24,20 +24,29 @@ struct Swiftboard {
         if let logPath = Log.startFileLogging() {
             Log.info("Logging to \(logPath).")
         }
+        Log.info("Swiftboard process starting (PID \(ProcessInfo.processInfo.processIdentifier)).")
 
-        let backend = ClipboardBackendFactory.make()
         let port = config.port
         // JSON + base64 inflate an image payload by roughly 1.4x; leave headroom.
         let maxFrameBytes = config.maxSizeBytes * 2 + 4096
+        guard let listener = Transport.makeListener(port: port) else {
+            Log.error("Failed to bind TCP port \(port). Another instance or application may be using it; exiting for supervisor restart.")
+            exit(1)
+        }
+        Log.info("Listening for peer clipboard updates on port \(port).")
 
         let registry = PeerRegistry()
         if let staticPeer = config.peerHost {
             registry.setStatic(staticPeer)
             Log.info("Using static peer \(staticPeer):\(port).")
         } else {
-            Discovery.start(port: port, registry: registry)
+            guard Discovery.start(port: port, registry: registry) else {
+                Log.error("Auto-discovery initialization failed; exiting for supervisor restart.")
+                exit(1)
+            }
         }
 
+        let backend = ClipboardBackendFactory.make()
         let engine = SyncEngine(backend: backend, config: config) { item in
             guard let host = registry.current() else {
                 Log.debug("No peer known yet; holding clipboard update.")
@@ -53,24 +62,26 @@ struct Swiftboard {
             }
         }
 
+        Log.info("Swiftboard ready on port \(port), images \(config.syncImages ? "on" : "off").")
+
+        let interval = Double(config.pollIntervalMS) / 1000.0
         Thread.detachNewThread {
-            Transport.runServer(port: port, maxFrameBytes: maxFrameBytes) { data in
-                guard let item = try? JSONDecoder().decode(ClipboardItem.self, from: data) else {
-                    Log.warn("Received a frame that could not be decoded.")
-                    return
-                }
-                engine.applyRemote(item)
+            while true {
+                engine.pollLocal()
+                Thread.sleep(forTimeInterval: interval)
             }
         }
 
-        Log.info(
-            "Swiftboard started on port \(port), images \(config.syncImages ? "on" : "off"). Press Ctrl+C to stop.",
-        )
+        self.runServer(listener: listener, maxFrameBytes: maxFrameBytes, engine: engine)
+    }
 
-        let interval = Double(config.pollIntervalMS) / 1000.0
-        while true {
-            engine.pollLocal()
-            Thread.sleep(forTimeInterval: interval)
+    private static func runServer(listener: SocketFD, maxFrameBytes: Int, engine: SyncEngine) {
+        Transport.runServer(listener: listener, maxFrameBytes: maxFrameBytes) { data in
+            guard let item = try? JSONDecoder().decode(ClipboardItem.self, from: data) else {
+                Log.warn("Received a frame that could not be decoded.")
+                return
+            }
+            engine.applyRemote(item)
         }
     }
 }
