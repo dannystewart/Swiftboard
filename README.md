@@ -90,7 +90,7 @@ To bypass UDP discovery and configure a fixed peer:
 sh ./Scripts/install-macos.sh
 ```
 
-This installs a signed, agent-only `Swiftboard.app` under `~/Applications` and registers a per-user `launchd` LaunchAgent with automatic restart. Allow Local Network access when macOS prompts on the first installation.
+This installs a signed standalone executable under `~/Library/Application Support/Swiftboard` and registers a per-user `launchd` LaunchAgent with automatic restart. Its Local Network usage description is embedded directly in the Mach-O binary; no application bundle is installed. Allow Local Network access when macOS prompts on the first installation.
 
 To configure a fixed peer:
 

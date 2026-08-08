@@ -1,7 +1,12 @@
 // swift-tools-version: 6.3
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import Foundation
 import PackageDescription
+
+let packageDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
+let macOSInfoPlist = URL(fileURLWithPath: packageDirectory)
+    .appendingPathComponent("Sources/Swiftboard/Info.plist").path
 
 let package = Package(
     name: "Swiftboard",
@@ -21,6 +26,7 @@ let package = Package(
             dependencies: [
                 .target(name: "CSTBImage", condition: .when(platforms: [.windows])),
             ],
+            exclude: ["Info.plist"],
             swiftSettings: [
                 .enableUpcomingFeature("ApproachableConcurrency"),
                 // Swift 6.3.2 for Windows asserts in ClosureSpecializer when
@@ -32,6 +38,17 @@ let package = Package(
                 ),
             ],
             linkerSettings: [
+                // Give the standalone macOS CLI a stable privacy identity without
+                // wrapping it in an application bundle.
+                .unsafeFlags(
+                    [
+                        "-Xlinker", "-sectcreate",
+                        "-Xlinker", "__TEXT",
+                        "-Xlinker", "__info_plist",
+                        "-Xlinker", macOSInfoPlist,
+                    ],
+                    .when(platforms: [.macOS]),
+                ),
                 // Link as a GUI-subsystem app on Windows so no console window is
                 // ever created (headless startup). /ENTRY:mainCRTStartup keeps the
                 // normal `main` entry point that @main provides, rather than the
