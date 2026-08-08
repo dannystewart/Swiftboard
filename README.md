@@ -78,6 +78,12 @@ The install scripts build a release binary, copy it to a stable per-user locatio
 
 This registers a per-user Scheduled Task. It starts at login, retries failures, and performs a five-minute fallback check. The executable is linked as a GUI-subsystem app, so it stays hidden without opening a console window.
 
+To bypass UDP discovery and configure a fixed peer:
+
+```powershell
+.\Scripts\install-windows.ps1 -Peer 192.168.1.50
+```
+
 **macOS:**
 
 ```bash
@@ -85,6 +91,12 @@ sh ./Scripts/install-macos.sh
 ```
 
 This registers a per-user `launchd` LaunchAgent with automatic restart.
+
+To configure a fixed peer:
+
+```bash
+sh ./Scripts/install-macos.sh 192.168.1.50
+```
 
 Run the same script with `-Uninstall` on Windows or `--uninstall` on macOS to stop and remove Swiftboard.
 

@@ -69,3 +69,16 @@ import Testing
     // Coming back is a reconnect, not a fresh discovery.
     #expect(registry.markSeen("192.168.1.9") == .reconnected)
 }
+
+@Test func `discovery parses announcements and replies`() throws {
+    let announcement = try #require(Discovery.parseBeacon("SWIFTBOARD/1 machine-a"))
+    #expect(announcement.id == "machine-a")
+    #expect(announcement.replyRequested == true)
+
+    let reply = try #require(Discovery.parseBeacon("SWIFTBOARD/1-REPLY machine-b"))
+    #expect(reply.id == "machine-b")
+    #expect(reply.replyRequested == false)
+
+    #expect(Discovery.parseBeacon("SWIFTBOARD/1 ") == nil)
+    #expect(Discovery.parseBeacon("something else") == nil)
+}

@@ -80,7 +80,24 @@ final class PeerRegistry: Sendable {
 /// different UUID reveals the peer's IP (read from the source address).
 enum Discovery {
     private static let beaconPrefix = "SWIFTBOARD/1 "
+    private static let replyPrefix = "SWIFTBOARD/1-REPLY "
     private static let interval: TimeInterval = 3
+
+    static func parseBeacon(_ text: String) -> (id: String, replyRequested: Bool)? {
+        let id: String
+        let replyRequested: Bool
+        if text.hasPrefix(self.beaconPrefix) {
+            id = String(text.dropFirst(self.beaconPrefix.count))
+            replyRequested = true
+        } else if text.hasPrefix(self.replyPrefix) {
+            id = String(text.dropFirst(self.replyPrefix.count))
+            replyRequested = false
+        } else {
+            return nil
+        }
+        guard !id.isEmpty else { return nil }
+        return (id, replyRequested)
+    }
 
     static func start(port: UInt16, registry: PeerRegistry) -> Bool {
         Sock.prepare()
@@ -155,8 +172,17 @@ enum Discovery {
         myID: String,
     ) {
         let message = Array((beaconPrefix + myID).utf8)
+        var failureLogged = false
         while true {
-            _ = self.sendBeacon(fd: fd, message: message, dest: destination)
+            if self.sendBeacon(fd: fd, message: message, dest: destination) {
+                if failureLogged {
+                    Log.info("Discovery broadcasts resumed.")
+                    failureLogged = false
+                }
+            } else if !failureLogged {
+                Log.warn("Discovery broadcast failed with OS error \(Sock.lastErrorCode()); will keep retrying.")
+                failureLogged = true
+            }
             Thread.sleep(forTimeInterval: self.interval)
         }
     }
@@ -208,16 +234,32 @@ enum Discovery {
         while true {
             var buffer = [UInt8](repeating: 0, count: 512)
             var from = [UInt8](repeating: 0, count: 128) // room for sockaddr_storage
-            let received = self.receive(fd: fd, buffer: &buffer, from: &from)
+            var fromLength = from.count
+            let received = self.receive(
+                fd: fd,
+                buffer: &buffer,
+                from: &from,
+                fromLength: &fromLength,
+            )
             guard received > 0 else {
                 Thread.sleep(forTimeInterval: 0.5) // avoid a hot loop on errors
                 continue
             }
 
             let text = String(decoding: buffer[0 ..< received], as: UTF8.self)
-            guard text.hasPrefix(self.beaconPrefix) else { continue }
-            let theirID = String(text.dropFirst(self.beaconPrefix.count))
-            if theirID == myID { continue } // our own broadcast echoing back
+            guard let beacon = self.parseBeacon(text), beacon.id != myID else {
+                continue
+            }
+
+            // A direct reply makes discovery work even when one platform can
+            // receive LAN broadcasts but cannot send the limited broadcast.
+            if beacon.replyRequested {
+                let destination = (bytes: Array(from.prefix(fromLength)), len: fromLength)
+                let reply = Array((self.replyPrefix + myID).utf8)
+                if !self.sendBeacon(fd: fd, message: reply, dest: destination) {
+                    Log.debug("Discovery reply failed with OS error \(Sock.lastErrorCode()).")
+                }
+            }
 
             // The IPv4 address sits at byte offset 4 of the sockaddr on both
             // platforms: Darwin's sin_len + sin_family (1+1) occupies the same
@@ -234,7 +276,12 @@ enum Discovery {
         }
     }
 
-    private static func receive(fd: SocketFD, buffer: inout [UInt8], from: inout [UInt8]) -> Int {
+    private static func receive(
+        fd: SocketFD,
+        buffer: inout [UInt8],
+        from: inout [UInt8],
+        fromLength: inout Int,
+    ) -> Int {
         buffer.withUnsafeMutableBytes { bufRaw in
             from.withUnsafeMutableBytes { fromRaw in
                 let sa = fromRaw.baseAddress!.assumingMemoryBound(to: sockaddr.self)
@@ -242,9 +289,11 @@ enum Discovery {
                     var fromLen = Int32(fromRaw.count)
                     let n = recvfrom(fd, bufRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
                                      Int32(bufRaw.count), 0, sa, &fromLen)
+                    fromLength = Int(fromLen)
                 #else
                     var fromLen = socklen_t(fromRaw.count)
                     let n = recvfrom(fd, bufRaw.baseAddress, bufRaw.count, 0, sa, &fromLen)
+                    fromLength = Int(fromLen)
                 #endif
                 return Int(n)
             }

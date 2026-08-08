@@ -58,6 +58,14 @@ enum Sock {
         #endif
     }
 
+    static func lastErrorCode() -> Int32 {
+        #if os(Windows)
+            WSAGetLastError()
+        #else
+            errno
+        #endif
+    }
+
     /// Sets a boolean SO_* option (e.g. SO_REUSEADDR, SO_BROADCAST) to 1.
     static func enableBoolOption(_ fd: SocketFD, _ option: Int32) -> Bool {
         var one: Int32 = 1

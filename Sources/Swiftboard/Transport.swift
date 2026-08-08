@@ -137,15 +137,20 @@ enum Transport {
         }
         defer { freeaddrinfo(result) }
 
-        let fd = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
-        guard fd != invalidSocketFD else { return nil }
-
-        Sock.setSendTimeout(fd, seconds: 3)
-        guard connect(fd, info.pointee.ai_addr, Sock.addrLen(info.pointee.ai_addrlen)) == 0 else {
-            Sock.close(fd)
-            return nil
+        var candidate: UnsafeMutablePointer<addrinfo>? = info
+        while let current = candidate {
+            let address = current.pointee
+            let fd = socket(address.ai_family, address.ai_socktype, address.ai_protocol)
+            if fd != invalidSocketFD {
+                Sock.setSendTimeout(fd, seconds: 3)
+                if connect(fd, address.ai_addr, Sock.addrLen(address.ai_addrlen)) == 0 {
+                    return fd
+                }
+                Sock.close(fd)
+            }
+            candidate = address.ai_next
         }
-        return fd
+        return nil
     }
 
     // MARK: - Byte-accurate send/recv

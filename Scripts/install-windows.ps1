@@ -1,5 +1,6 @@
 param(
-    [switch] $Uninstall
+    [switch] $Uninstall,
+    [string] $Peer
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,10 +9,24 @@ $taskName = "Swiftboard"
 $installDirectory = Join-Path $env:LOCALAPPDATA "Swiftboard"
 $executable = Join-Path $installDirectory "swiftboard.exe"
 
-if ($Uninstall) {
+function Stop-Swiftboard {
+    Disable-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue | Out-Null
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-    Get-Process -Name "swiftboard" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    $processes = @(Get-Process -Name "swiftboard" -ErrorAction SilentlyContinue)
+    $processes | Stop-Process -Force -ErrorAction SilentlyContinue
+    if ($processes) {
+        $processes | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+    }
+    if (Get-Process -Name "swiftboard" -ErrorAction SilentlyContinue) {
+        throw "Could not stop the existing Swiftboard process."
+    }
+    Start-Sleep -Milliseconds 250
+}
+
+if ($Uninstall) {
+    Stop-Swiftboard
     Remove-Item $executable -Force -ErrorAction SilentlyContinue
     if ((Test-Path $installDirectory) -and -not (Get-ChildItem $installDirectory -Force)) {
         Remove-Item $installDirectory -Force
@@ -36,9 +51,7 @@ try {
     Pop-Location
 }
 
-Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-Get-Process -Name "swiftboard" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Stop-Swiftboard
 New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
 Copy-Item (Join-Path $binDirectory "swiftboard.exe") $executable -Force
 
@@ -47,6 +60,11 @@ Remove-Item $startupShortcut -Force -ErrorAction SilentlyContinue
 
 $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $escapedExecutable = [System.Security.SecurityElement]::Escape($executable)
+$argumentsXml = ""
+if ($Peer) {
+    $escapedPeer = [System.Security.SecurityElement]::Escape($Peer)
+    $argumentsXml = "<Arguments>$escapedPeer</Arguments>"
+}
 $startBoundary = (Get-Date).AddMinutes(1).ToString("s")
 $taskXml = @"
 <?xml version="1.0" encoding="UTF-16"?>
@@ -106,6 +124,7 @@ $taskXml = @"
   <Actions Context="Author">
     <Exec>
       <Command>$escapedExecutable</Command>
+      $argumentsXml
     </Exec>
   </Actions>
 </Task>
@@ -115,4 +134,7 @@ Register-ScheduledTask -TaskName $taskName -Xml $taskXml -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
 
 Write-Host "Swiftboard installed and running. Log: $installDirectory\swiftboard.log"
+if ($Peer) {
+    Write-Host "Configured peer: $Peer"
+}
 Write-Host "Run this script with -Uninstall to remove it."

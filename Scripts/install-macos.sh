@@ -7,8 +7,9 @@ install_dir="$HOME/Library/Application Support/Swiftboard"
 executable="$install_dir/swiftboard"
 plist="$HOME/Library/LaunchAgents/$label.plist"
 domain="gui/$(id -u)"
+peer="${1:-}"
 
-if [ "${1:-}" = "--uninstall" ]; then
+if [ "$peer" = "--uninstall" ]; then
     launchctl bootout "$domain/$label" 2>/dev/null || true
     pkill -x swiftboard 2>/dev/null || true
     rm -f "$plist" "$executable"
@@ -24,6 +25,11 @@ printf 'Building Swiftboard...\n'
 swift build -c release
 bin_dir=$(swift build -c release --show-bin-path)
 escaped_executable=$(printf '%s' "$executable" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+peer_argument=""
+if [ -n "$peer" ]; then
+    escaped_peer=$(printf '%s' "$peer" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+    peer_argument="        <string>$escaped_peer</string>"
+fi
 
 mkdir -p "$install_dir" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
 launchctl bootout "$domain/$label" 2>/dev/null || true
@@ -40,6 +46,7 @@ cat > "$plist" <<EOF
     <key>ProgramArguments</key>
     <array>
         <string>$escaped_executable</string>
+$peer_argument
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -62,4 +69,7 @@ launchctl bootstrap "$domain" "$plist"
 launchctl kickstart -k "$domain/$label"
 
 printf 'Swiftboard installed and running. Log: %s\n' "$HOME/Library/Logs/swiftboard.log"
+if [ -n "$peer" ]; then
+    printf 'Configured peer: %s\n' "$peer"
+fi
 printf 'Run sh %s --uninstall to remove it.\n' "$0"
