@@ -43,11 +43,6 @@ enum Transport {
     static func sendFrame(to host: String, port: UInt16, payload: Data) {
         Sock.prepare()
 
-        guard let fd = connectTo(host: host, port: port) else {
-            return
-        }
-        defer { Sock.close(fd) }
-
         var frame = [UInt8]()
         let length = UInt32(payload.count)
         frame.append(UInt8((length >> 24) & 0xFF))
@@ -55,6 +50,25 @@ enum Transport {
         frame.append(UInt8((length >> 8) & 0xFF))
         frame.append(UInt8(length & 0xFF))
         frame.append(contentsOf: payload)
+
+        let connection = connectTo(host: host, port: port)
+        guard let fd = connection.fd else {
+            #if os(macOS)
+                if connection.error == EHOSTUNREACH,
+                   self.sendFrameWithSystemNetcat(to: host, port: port, frame: frame)
+                {
+                    Log.info("Sent \(payload.count)-byte frame to \(host):\(port) using the macOS system transport.")
+                    return
+                }
+            #endif
+            if let error = connection.error {
+                Log.warn(
+                    "Could not connect to peer \(host):\(port) (OS error \(error)); update not delivered.",
+                )
+            }
+            return
+        }
+        defer { Sock.close(fd) }
 
         if self.sendAll(fd, frame) {
             Log.info("Sent \(payload.count)-byte frame to \(host):\(port).")
@@ -125,7 +139,7 @@ enum Transport {
         return fd
     }
 
-    private static func connectTo(host: String, port: UInt16) -> SocketFD? {
+    private static func connectTo(host: String, port: UInt16) -> (fd: SocketFD?, error: Int32?) {
         var hints = addrinfo()
         hints.ai_family = AF_INET
         hints.ai_socktype = Sock.stream
@@ -136,7 +150,7 @@ enum Transport {
             Log.warn(
                 "Could not resolve peer \(host):\(port) (getaddrinfo error \(resolveResult)); update not delivered.",
             )
-            return nil
+            return (nil, nil)
         }
         defer { freeaddrinfo(result) }
 
@@ -148,7 +162,7 @@ enum Transport {
             if fd != invalidSocketFD {
                 Sock.setSendTimeout(fd, seconds: 3)
                 if connect(fd, address.ai_addr, Sock.addrLen(address.ai_addrlen)) == 0 {
-                    return fd
+                    return (fd, nil)
                 }
                 lastError = Sock.lastErrorCode()
                 Sock.close(fd)
@@ -157,15 +171,40 @@ enum Transport {
             }
             candidate = address.ai_next
         }
-        if let lastError {
-            Log.warn(
-                "Could not connect to peer \(host):\(port) (OS error \(lastError)); update not delivered.",
-            )
-        } else {
+        if lastError == nil {
             Log.warn("Could not connect to peer \(host):\(port); update not delivered.")
         }
-        return nil
+        return (nil, lastError)
     }
+
+    #if os(macOS)
+        /// macOS 27 beta can deny third-party local-network sockets with
+        /// EHOSTUNREACH while allowing the same connection through /usr/bin/nc.
+        private static func sendFrameWithSystemNetcat(
+            to host: String,
+            port: UInt16,
+            frame: [UInt8],
+        ) -> Bool {
+            let process = Process()
+            let input = Pipe()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
+            process.arguments = ["-w", "3", host, String(port)]
+            process.standardInput = input
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+
+            do {
+                try process.run()
+                try input.fileHandleForWriting.write(contentsOf: Data(frame))
+                try input.fileHandleForWriting.close()
+                process.waitUntilExit()
+                return process.terminationStatus == 0
+            } catch {
+                try? input.fileHandleForWriting.close()
+                return false
+            }
+        }
+    #endif
 
     // MARK: - Byte-accurate send/recv
 

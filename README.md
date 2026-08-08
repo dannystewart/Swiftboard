@@ -1,6 +1,6 @@
 # Swiftboard
 
-A small cross-platform CLI that keeps the clipboard in sync between two machines on the same LAN. Copy on one, paste on the other. Text and images.
+A small cross-platform clipboard agent that keeps two machines on the same LAN in sync. Copy on one, paste on the other. Text and images. It runs as a signed background app on macOS and a headless executable on Windows.
 
 ## Features
 
@@ -28,11 +28,15 @@ Platform specifics live behind a `ClipboardBackend` protocol: macOS uses `NSPast
 
 ## Build
 
+The cross-platform command-line executable, including the Windows build, remains a Swift package:
+
 ```bash
 swift build -c release
 ```
 
 The binary lands at `.build/release/swiftboard`.
+
+On macOS, open `Swiftboard.xcodeproj` and build the `Swiftboard` scheme to produce `Swiftboard.app`. The app target compiles the same implementation as the CLI, has the stable bundle identifier `com.dannystewart.swiftboard`, and runs as an `LSUIElement` agent without a Dock icon or window.
 
 ## Usage
 
@@ -90,7 +94,9 @@ To bypass UDP discovery and configure a fixed peer:
 sh ./Scripts/install-macos.sh
 ```
 
-This installs a signed standalone executable under `~/Library/Application Support/Swiftboard` and registers a per-user `launchd` LaunchAgent with automatic restart. Its Local Network usage description is embedded directly in the Mach-O binary; no application bundle is installed. Allow Local Network access when macOS prompts on the first installation.
+This uses Xcode to build and sign `Swiftboard.app`, installs it under `~/Applications`, and registers a per-user `launchd` LaunchAgent with automatic restart. The bundle declares its Local Network usage and provides a stable code identity for macOS privacy controls. Allow Local Network access when macOS prompts on the first installation.
+
+macOS 27 beta can incorrectly return `EHOSTUNREACH` (`OS error 65`) for private-LAN connections from directly launched third-party background processes, even when their signed bundle identity is recognized. Swiftboard detects that specific failure and retries the framed send through Apple-signed `/usr/bin/nc`; other platforms and unaffected macOS versions continue using the native socket transport.
 
 To configure a fixed peer:
 
@@ -101,6 +107,8 @@ sh ./Scripts/install-macos.sh 192.168.1.50
 Run the same script with `-Uninstall` on Windows or `--uninstall` on macOS to stop and remove Swiftboard.
 
 Logs are written to `%LOCALAPPDATA%\Swiftboard\swiftboard.log` on Windows and `~/Library/Logs/swiftboard.log` on macOS. Startup is fail-fast: if Swiftboard cannot initialize its TCP listener or discovery socket, it exits so the OS supervisor can retry instead of leaving a partially working process behind.
+
+The Xcode target uses automatic signing with the development team configured in the project. For distribution to another Mac, select a Developer ID Application certificate and archive/notarize the app in Xcode; the runtime and installer layout do not otherwise change.
 
 ## Limitations
 
