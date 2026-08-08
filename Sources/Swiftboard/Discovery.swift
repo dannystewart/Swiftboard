@@ -95,12 +95,6 @@ enum Discovery {
             Log.error("Could not resolve the discovery broadcast address.")
             return false
         }
-        let message = Array((beaconPrefix + myID).utf8)
-        guard self.sendBeacon(fd: fd, message: message, dest: destination) else {
-            Sock.close(fd)
-            Log.error("Could not send a discovery broadcast.")
-            return false
-        }
 
         Log.info("Auto-discovery active: broadcasting on UDP port \(port).")
         Thread.detachNewThread { self.listenLoop(fd: fd, myID: myID, registry: registry) }
