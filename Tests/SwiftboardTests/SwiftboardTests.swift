@@ -82,3 +82,13 @@ import Testing
     #expect(Discovery.parseBeacon("SWIFTBOARD/1 ") == nil)
     #expect(Discovery.parseBeacon("something else") == nil)
 }
+
+@Test func `discovery calculates directed subnet broadcast`() throws {
+    let address: [UInt8] = [16, 2, 0, 0, 192, 168, 119, 101, 0, 0, 0, 0, 0, 0, 0, 0]
+    let netmask: [UInt8] = [16, 2, 0, 0, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    let result = try #require(
+        Discovery.directedBroadcast(address: address, netmask: netmask, port: 8765),
+    )
+
+    #expect(result[2 ... 7] == [0x22, 0x3D, 192, 168, 119, 255])
+}

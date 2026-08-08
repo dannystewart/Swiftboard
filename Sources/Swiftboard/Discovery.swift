@@ -99,6 +99,22 @@ enum Discovery {
         return (id, replyRequested)
     }
 
+    static func directedBroadcast(
+        address: some Collection<UInt8>,
+        netmask: some Collection<UInt8>,
+        port: UInt16,
+    ) -> [UInt8]? {
+        var bytes = Array(address)
+        let mask = Array(netmask)
+        guard bytes.count >= 8, mask.count >= 8 else { return nil }
+        bytes[2] = UInt8((port >> 8) & 0xFF)
+        bytes[3] = UInt8(port & 0xFF)
+        for index in 4 ... 7 {
+            bytes[index] |= ~mask[index]
+        }
+        return bytes
+    }
+
     static func start(port: UInt16, registry: PeerRegistry) -> Bool {
         Sock.prepare()
         let myID = UUID().uuidString
@@ -107,15 +123,16 @@ enum Discovery {
             Log.error("Discovery socket setup failed; auto-discovery unavailable. Pass a peer address instead.")
             return false
         }
-        guard let destination = resolveBroadcast(port: port) else {
+        let destinations = resolveBroadcasts(port: port)
+        guard !destinations.isEmpty else {
             Sock.close(fd)
-            Log.error("Could not resolve the discovery broadcast address.")
+            Log.error("Could not resolve a discovery broadcast address.")
             return false
         }
 
         Log.info("Auto-discovery active: broadcasting on UDP port \(port).")
         Thread.detachNewThread { self.listenLoop(fd: fd, myID: myID, registry: registry) }
-        Thread.detachNewThread { self.broadcastLoop(fd: fd, destination: destination, myID: myID) }
+        Thread.detachNewThread { self.broadcastLoop(fd: fd, destinations: destinations, myID: myID) }
         Thread.detachNewThread { self.livenessLoop(registry: registry) }
         return true
     }
@@ -168,13 +185,19 @@ enum Discovery {
 
     private static func broadcastLoop(
         fd: SocketFD,
-        destination: (bytes: [UInt8], len: Int),
+        destinations: [(bytes: [UInt8], len: Int)],
         myID: String,
     ) {
         let message = Array((beaconPrefix + myID).utf8)
         var failureLogged = false
         while true {
-            if self.sendBeacon(fd: fd, message: message, dest: destination) {
+            var sent = false
+            for destination in destinations {
+                if self.sendBeacon(fd: fd, message: message, dest: destination) {
+                    sent = true
+                }
+            }
+            if sent {
                 if failureLogged {
                     Log.info("Discovery broadcasts resumed.")
                     failureLogged = false
@@ -187,8 +210,47 @@ enum Discovery {
         }
     }
 
-    /// Resolve 255.255.255.255:port once and keep the raw sockaddr bytes to reuse.
-    private static func resolveBroadcast(port: UInt16) -> (bytes: [UInt8], len: Int)? {
+    private static func resolveBroadcasts(port: UInt16) -> [(bytes: [UInt8], len: Int)] {
+        #if os(Windows)
+            guard let destination = resolveLimitedBroadcast(port: port) else { return [] }
+            return [destination]
+        #else
+            var interfaces: UnsafeMutablePointer<ifaddrs>?
+            guard getifaddrs(&interfaces) == 0, let first = interfaces else { return [] }
+            defer { freeifaddrs(interfaces) }
+
+            var destinations: [(bytes: [UInt8], len: Int)] = []
+            var current: UnsafeMutablePointer<ifaddrs>? = first
+            while let interface = current {
+                current = interface.pointee.ifa_next
+                guard
+                    let address = interface.pointee.ifa_addr,
+                    let netmask = interface.pointee.ifa_netmask,
+                    address.pointee.sa_family == UInt8(AF_INET)
+                else {
+                    continue
+                }
+
+                let length = MemoryLayout<sockaddr_in>.size
+                let addressBytes = UnsafeRawBufferPointer(start: address, count: length)
+                let maskBytes = UnsafeRawBufferPointer(start: netmask, count: length)
+                guard addressBytes[4] != 127 else { continue }
+
+                guard let bytes = self.directedBroadcast(
+                    address: addressBytes,
+                    netmask: maskBytes,
+                    port: port,
+                ) else { continue }
+                destinations.append((bytes, length))
+            }
+            return destinations
+        #endif
+    }
+
+    #if os(Windows)
+    /// Windows routes the limited broadcast correctly; macOS needs the directed
+    /// broadcast for each active interface instead.
+    private static func resolveLimitedBroadcast(port: UInt16) -> (bytes: [UInt8], len: Int)? {
         var hints = addrinfo()
         hints.ai_family = AF_INET
         hints.ai_socktype = Sock.dgram
@@ -209,6 +271,7 @@ enum Discovery {
         }
         return (bytes, len)
     }
+    #endif
 
     private static func sendBeacon(
         fd: SocketFD,
