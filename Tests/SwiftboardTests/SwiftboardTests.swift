@@ -24,6 +24,24 @@ import Testing
     #expect(decoded.hash == original.hash)
 }
 
+@Test func `large screenshot-sized image round trips through wire format`() throws {
+    let bytes = Data(repeating: 0xA5, count: 11 * 1024 * 1024)
+    let original = ClipboardItem.image(png: bytes)
+    let data = try JSONEncoder().encode(original)
+    let decoded = try JSONDecoder().decode(ClipboardItem.self, from: data)
+
+    #expect(decoded.imagePNG == bytes)
+    #expect(data.count <= Config().maxFrameBytes)
+}
+
+@Test func `default payload limit accommodates large screenshots`() {
+    let config = Config()
+
+    #expect(config.maxSizeMB == 100)
+    #expect(config.maxSizeBytes == 100 * 1024 * 1024)
+    #expect(config.maxFrameBytes == 200 * 1024 * 1024 + 4096)
+}
+
 @Test func `different content hashes differently`() {
     #expect(ClipboardItem.text("a").hash != ClipboardItem.text("b").hash)
     // Same content is stable across separate constructions (cross-machine dedup).

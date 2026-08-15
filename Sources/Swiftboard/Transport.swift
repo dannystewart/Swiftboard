@@ -160,7 +160,7 @@ enum Transport {
             let address = current.pointee
             let fd = socket(address.ai_family, address.ai_socktype, address.ai_protocol)
             if fd != invalidSocketFD {
-                Sock.setSendTimeout(fd, seconds: 3)
+                Sock.setSendTimeout(fd, seconds: 30)
                 if connect(fd, address.ai_addr, Sock.addrLen(address.ai_addrlen)) == 0 {
                     return (fd, nil)
                 }
@@ -188,7 +188,7 @@ enum Transport {
             let process = Process()
             let input = Pipe()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
-            process.arguments = ["-w", "3", host, String(port)]
+            process.arguments = ["-w", "30", host, String(port)]
             process.standardInput = input
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice

@@ -26,12 +26,14 @@ struct Config: Sendable {
     var port: UInt16 = 8765
     var verbose: Bool = false
 
-    // Fixed defaults. Not exposed as flags on purpose; change them here if needed.
-    var maxSizeMB: Int = 10
+    // Keep a defensive bound against malformed frames without rejecting normal
+    // high-resolution screenshots.
+    var maxSizeMB: Int = 100
     var pollIntervalMS: Int = 250
     var syncImages: Bool = true
 
     var maxSizeBytes: Int { self.maxSizeMB * 1024 * 1024 }
+    var maxFrameBytes: Int { self.maxSizeBytes * 2 + 4096 }
 }
 
 // MARK: - ArgError

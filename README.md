@@ -59,7 +59,7 @@ swiftboard 192.168.1.50
 - `--verbose` — debug logging, including discovery heartbeats.
 - `-h`, `--help` — usage.
 
-A few values are fixed in code rather than exposed as flags (see `Config.swift`): max payload size (10 MB), poll interval (250 ms), and whether images sync.
+A few values are fixed in code rather than exposed as flags (see `Config.swift`): max payload size (100 MiB), poll interval (250 ms), and whether images sync. The high payload ceiling accommodates large, high-resolution PNG screenshots while retaining a defensive bound on incoming network frames.
 
 ## Firewall
 

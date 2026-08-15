@@ -20,8 +20,6 @@ final class SwiftboardService {
 
     init(config: Config) throws {
         let port = config.port
-        // JSON + base64 inflate an image payload by roughly 1.4x; leave headroom.
-        let maxFrameBytes = config.maxSizeBytes * 2 + 4096
         guard let listener = Transport.makeListener(port: port) else {
             throw SwiftboardServiceError.listener(port)
         }
@@ -62,7 +60,7 @@ final class SwiftboardService {
         }
 
         Thread.detachNewThread {
-            Transport.runServer(listener: listener, maxFrameBytes: maxFrameBytes) { data in
+            Transport.runServer(listener: listener, maxFrameBytes: config.maxFrameBytes) { data in
                 guard let item = try? JSONDecoder().decode(ClipboardItem.self, from: data) else {
                     Log.warn("Received a frame that could not be decoded.")
                     return
