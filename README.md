@@ -65,7 +65,7 @@ A few values are fixed in code rather than exposed as flags (see `Config.swift`)
 
 Swiftboard listens on the chosen port over **both TCP** (clipboard data) and **UDP** (discovery beacons). On first run, allow both for Private networks:
 
-- **Windows:** approve the Defender Firewall prompt(s), or add inbound allow rules for the port (TCP and UDP).
+- **Windows:** the installer requests administrator approval and adds inbound TCP sync and UDP discovery rules for Private networks. If the network is classified as Public, change it to Private before running Swiftboard.
 - **macOS:** if the outbound connection is blocked, check System Settings → Privacy & Security → Local Network.
 
 ## Install for automatic startup
@@ -80,7 +80,7 @@ The install scripts build a release binary, copy it to a stable per-user locatio
 .\Scripts\install-windows.ps1
 ```
 
-This registers a per-user Scheduled Task. It starts at login, retries failures, and performs a five-minute fallback check. The executable is linked as a GUI-subsystem app, so it stays hidden without opening a console window.
+This requests administrator approval to configure Defender Firewall, then registers a per-user Scheduled Task. It starts at login, retries failures, and performs a five-minute fallback check. The executable is linked as a GUI-subsystem app, so it stays hidden without opening a console window.
 
 To bypass UDP discovery and configure a fixed peer:
 

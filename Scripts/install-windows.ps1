@@ -8,6 +8,28 @@ $ErrorActionPreference = "Stop"
 $taskName = "Swiftboard"
 $installDirectory = Join-Path $env:LOCALAPPDATA "Swiftboard"
 $executable = Join-Path $installDirectory "swiftboard.exe"
+$tcpFirewallRule = "Swiftboard-TCP-In"
+$udpFirewallRule = "Swiftboard-UDP-In"
+
+$principal = New-Object Security.Principal.WindowsPrincipal(
+    [Security.Principal.WindowsIdentity]::GetCurrent()
+)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    $elevatedArguments = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", "`"$PSCommandPath`""
+    )
+    if ($Uninstall) {
+        $elevatedArguments += "-Uninstall"
+    }
+    if ($Peer) {
+        $elevatedArguments += @("-Peer", $Peer)
+    }
+
+    $process = Start-Process powershell.exe -Verb RunAs -ArgumentList $elevatedArguments -Wait -PassThru
+    exit $process.ExitCode
+}
 
 function Stop-Swiftboard {
     Disable-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue | Out-Null
@@ -27,6 +49,8 @@ function Stop-Swiftboard {
 
 if ($Uninstall) {
     Stop-Swiftboard
+    Remove-NetFirewallRule -Name $tcpFirewallRule -ErrorAction SilentlyContinue
+    Remove-NetFirewallRule -Name $udpFirewallRule -ErrorAction SilentlyContinue
     Remove-Item $executable -Force -ErrorAction SilentlyContinue
     if ((Test-Path $installDirectory) -and -not (Get-ChildItem $installDirectory -Force)) {
         Remove-Item $installDirectory -Force
@@ -54,6 +78,34 @@ try {
 Stop-Swiftboard
 New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
 Copy-Item (Join-Path $binDirectory "swiftboard.exe") $executable -Force
+
+Remove-NetFirewallRule -Name $tcpFirewallRule -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -Name $udpFirewallRule -ErrorAction SilentlyContinue
+$tcpFirewallParameters = @{
+    Name = $tcpFirewallRule
+    DisplayName = "Swiftboard TCP (Private networks)"
+    Direction = "Inbound"
+    Action = "Allow"
+    Enabled = "True"
+    Profile = "Private"
+    Program = $executable
+    Protocol = "TCP"
+    LocalPort = 8765
+}
+New-NetFirewallRule @tcpFirewallParameters | Out-Null
+
+$udpFirewallParameters = @{
+    Name = $udpFirewallRule
+    DisplayName = "Swiftboard UDP discovery (Private networks)"
+    Direction = "Inbound"
+    Action = "Allow"
+    Enabled = "True"
+    Profile = "Private"
+    Program = $executable
+    Protocol = "UDP"
+    LocalPort = 8765
+}
+New-NetFirewallRule @udpFirewallParameters | Out-Null
 
 $startupShortcut = Join-Path ([Environment]::GetFolderPath("Startup")) "Swiftboard.lnk"
 Remove-Item $startupShortcut -Force -ErrorAction SilentlyContinue
@@ -134,6 +186,7 @@ Register-ScheduledTask -TaskName $taskName -Xml $taskXml -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
 
 Write-Host "Swiftboard installed and running. Log: $installDirectory\swiftboard.log"
+Write-Host "Allowed TCP sync and UDP discovery on private networks."
 if ($Peer) {
     Write-Host "Configured peer: $Peer"
 }
