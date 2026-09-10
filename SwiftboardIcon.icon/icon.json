@@ -1,6 +1,9 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+    "linear-gradient" : [
+      "display-p3:0.36599,0.24442,1.00000,1.00000",
+      "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+    ]
   },
   "groups" : [
     {
@@ -11,7 +14,10 @@
               "appearance" : "dark",
               "idiom" : "square",
               "value" : {
-                "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+                "linear-gradient" : [
+                  "display-p3:0.42813,0.31848,1.00000,1.00000",
+                  "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+                ]
               }
             }
           ],
