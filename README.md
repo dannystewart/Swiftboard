@@ -96,7 +96,7 @@ sh ./Scripts/install-macos.sh
 
 This uses Xcode to build and sign `Swiftboard.app`, installs it under `~/Applications`, and registers a per-user `launchd` LaunchAgent with automatic restart. The bundle declares its Local Network usage and provides a stable code identity for macOS privacy controls. Allow Local Network access when macOS prompts on the first installation.
 
-macOS 27 beta can incorrectly return `EHOSTUNREACH` (`OS error 65`) for private-LAN connections from directly launched third-party background processes, even when their signed bundle identity is recognized. Swiftboard detects that specific failure and retries the framed send through Apple-signed `/usr/bin/nc`; other platforms and unaffected macOS versions continue using the native socket transport.
+macOS 27 can incorrectly return `EHOSTUNREACH` (`OS error 65`) for private-LAN connections from directly launched third-party background processes, even when their signed bundle identity is recognized. Swiftboard detects that specific failure and retries the framed send through Apple-signed `/usr/bin/nc`; other platforms and unaffected macOS versions continue using the native socket transport.
 
 To configure a fixed peer:
 
