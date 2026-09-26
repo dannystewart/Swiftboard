@@ -9,7 +9,8 @@ import Foundation
 // MARK: - Transport
 
 /// Length-prefixed framing: a 4-byte big-endian payload length followed by the
-/// JSON bytes. One frame per clipboard update; the sender opens a fresh
+/// payload bytes. Text uses JSON; images use a marker followed by PNG bytes.
+/// One frame per clipboard update; the sender opens a fresh
 /// connection per update and closes it, which keeps the protocol stateless.
 enum Transport {
     /// Creates the listener synchronously so startup cannot report success while
@@ -43,13 +44,13 @@ enum Transport {
     static func sendFrame(to host: String, port: UInt16, payload: Data) {
         Sock.prepare()
 
-        var frame = [UInt8]()
+        var frame = Data(capacity: payload.count + 4)
         let length = UInt32(payload.count)
         frame.append(UInt8((length >> 24) & 0xFF))
         frame.append(UInt8((length >> 16) & 0xFF))
         frame.append(UInt8((length >> 8) & 0xFF))
         frame.append(UInt8(length & 0xFF))
-        frame.append(contentsOf: payload)
+        frame.append(payload)
 
         let connection = connectTo(host: host, port: port)
         guard let fd = connection.fd else {
@@ -183,7 +184,7 @@ enum Transport {
         private static func sendFrameWithSystemNetcat(
             to host: String,
             port: UInt16,
-            frame: [UInt8],
+            frame: Data,
         ) -> Bool {
             let process = Process()
             let input = Pipe()
@@ -195,7 +196,7 @@ enum Transport {
 
             do {
                 try process.run()
-                try input.fileHandleForWriting.write(contentsOf: Data(frame))
+                try input.fileHandleForWriting.write(contentsOf: frame)
                 try input.fileHandleForWriting.close()
                 process.waitUntilExit()
                 return process.terminationStatus == 0
@@ -208,7 +209,7 @@ enum Transport {
 
     // MARK: - Byte-accurate send/recv
 
-    private static func sendAll(_ fd: SocketFD, _ bytes: [UInt8]) -> Bool {
+    private static func sendAll(_ fd: SocketFD, _ bytes: Data) -> Bool {
         var sent = 0
         return bytes.withUnsafeBytes { raw -> Bool in
             let base = raw.baseAddress!

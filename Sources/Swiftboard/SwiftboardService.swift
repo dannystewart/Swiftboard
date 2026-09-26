@@ -39,7 +39,7 @@ final class SwiftboardService {
                 Log.debug("No peer known yet; holding clipboard update.")
                 return
             }
-            guard let payload = try? JSONEncoder().encode(item) else {
+            guard let payload = ClipboardWireFormat.encode(item) else {
                 Log.warn("Failed to encode clipboard item; not sending.")
                 return
             }
@@ -61,7 +61,7 @@ final class SwiftboardService {
 
         Thread.detachNewThread {
             Transport.runServer(listener: listener, maxFrameBytes: config.maxFrameBytes) { data in
-                guard let item = try? JSONDecoder().decode(ClipboardItem.self, from: data) else {
+                guard let item = ClipboardWireFormat.decode(data, maxImageBytes: config.maxSizeBytes) else {
                     Log.warn("Received a frame that could not be decoded.")
                     return
                 }

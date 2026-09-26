@@ -13,12 +13,14 @@ A small cross-platform clipboard agent that keeps two machines on the same LAN i
 ## How it works
 
 - A background loop polls the OS clipboard, using a cheap change token (`NSPasteboard.changeCount` on macOS, `GetClipboardSequenceNumber` on Windows) so it only reads when something actually changed.
-- On a real change, the item is pushed to the peer over a TCP connection as a length-prefixed JSON frame.
+- On a real change, the item is pushed to the peer over a length-prefixed TCP frame: text as JSON, images as raw PNG bytes (with a one-byte type marker, no base64).
 - A TCP server receives frames and writes them to the local clipboard.
 - Echo suppression: after applying a received item, the local clipboard is re-read and its hash/token recorded, so the poll loop recognizes it as "already have this" rather than re-broadcasting it. This holds even for images, whose bytes differ after a round-trip through each platform's clipboard.
 - Discovery: each instance broadcasts a `SWIFTBOARD/1 <uuid>` beacon every few seconds and listens for the other's. A beacon with a different UUID reveals the peer's address. The same beacons double as a heartbeat for liveness.
 
 Platform specifics live behind a `ClipboardBackend` protocol: macOS uses `NSPasteboard` / `NSBitmapImageRep`; Windows uses the Win32 clipboard API with a small stb-based C shim (`Sources/CSTBImage`) to convert between the clipboard's DIB format and PNG.
+
+Update both machines when upgrading from a JSON-only build: the new build can receive older JSON image frames, but the old build cannot receive the new binary image frames.
 
 ## Requirements
 

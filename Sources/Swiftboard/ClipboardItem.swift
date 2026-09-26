@@ -56,8 +56,8 @@ struct ClipboardItem: Sendable {
 
 // MARK: Codable
 
-// JSON wire format. Images are base64-encoded. The hash is intentionally not
-// encoded: the receiver recomputes it from content so both ends agree.
+// JSON representation used for text frames (and accepted for images from older
+// peers). The hash is intentionally not encoded: the receiver recomputes it.
 extension ClipboardItem: Codable {
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -99,3 +99,33 @@ extension ClipboardItem: Codable {
 }
 
 extension ClipboardItem.Kind: Codable {}
+
+/// Text keeps its existing JSON frame. An image frame starts with a zero byte
+/// (which cannot start JSON) followed by the original PNG bytes, without base64.
+enum ClipboardWireFormat {
+    private static let imageMarker: UInt8 = 0
+
+    static func encode(_ item: ClipboardItem) -> Data? {
+        switch item.kind {
+        case .text:
+            return try? JSONEncoder().encode(item)
+        case .image:
+            guard let png = item.imagePNG else { return nil }
+            var payload = Data(capacity: png.count + 1)
+            payload.append(self.imageMarker)
+            payload.append(png)
+            return payload
+        }
+    }
+
+    static func decode(_ payload: Data, maxImageBytes: Int) -> ClipboardItem? {
+        guard let first = payload.first else { return nil }
+        if first == self.imageMarker {
+            let png = payload.dropFirst()
+            guard !png.isEmpty, png.count <= maxImageBytes else { return nil }
+            return .image(png: Data(png))
+        }
+        // Accept old JSON image frames as well, for a staggered update.
+        return try? JSONDecoder().decode(ClipboardItem.self, from: payload)
+    }
+}
