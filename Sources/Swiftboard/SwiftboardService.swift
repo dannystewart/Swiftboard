@@ -60,12 +60,39 @@ final class SwiftboardService {
         }
 
         Thread.detachNewThread {
-            Transport.runServer(listener: listener, maxFrameBytes: config.maxFrameBytes) { data in
+            Transport.runServer(listener: listener, maxFrameBytes: config.maxFrameBytes) { data, peerHost in
+                #if os(macOS)
+                    let processingStarted = ProcessInfo.processInfo.systemUptime
+                #endif
                 guard let item = ClipboardWireFormat.decode(data, maxImageBytes: config.maxSizeBytes) else {
                     Log.warn("Received a frame that could not be decoded.")
                     return
                 }
+                // An incoming update identifies the peer even if its UDP discovery
+                // beacons cannot reach us. Never replace an explicitly configured peer.
+                if config.peerHost == nil {
+                    switch registry.markSeen(peerHost) {
+                    case .discovered:
+                        Log.info("Learned peer at \(peerHost) from incoming TCP update.")
+                    case .reconnected:
+                        Log.info("Peer back online at \(peerHost) from incoming TCP update.")
+                    case .stillPresent:
+                        break
+                    }
+                }
+                #if os(macOS)
+                    let decodedAt = ProcessInfo.processInfo.systemUptime
+                #endif
                 engine.applyRemote(item)
+                #if os(macOS)
+                    if item.kind == .image {
+                        let appliedAt = ProcessInfo.processInfo.systemUptime
+                        Log.info(
+                            "Image processing: decode \(String(format: "%.3f", decodedAt - processingStarted))s, "
+                                + "clipboard write and settle \(String(format: "%.3f", appliedAt - decodedAt))s.",
+                        )
+                    }
+                #endif
             }
         }
     }

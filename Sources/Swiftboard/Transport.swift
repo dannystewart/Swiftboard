@@ -22,19 +22,32 @@ enum Transport {
     }
 
     /// Runs the accept loop forever on the calling thread. `onReceive` is invoked
-    /// on this same thread for each received frame.
+    /// on this same thread for each received frame, with the sender's IPv4 address.
     static func runServer(
         listener: SocketFD,
         maxFrameBytes: Int,
-        onReceive: @escaping (Data) -> Void,
+        onReceive: @escaping (Data, String) -> Void,
     ) {
         while true {
-            let clientFD = accept(listener, nil, nil)
+            var peerAddress = [UInt8](repeating: 0, count: 128) // sockaddr_storage
+            var addressLength = Sock.addrLen(peerAddress.count)
+            let clientFD = peerAddress.withUnsafeMutableBytes { raw in
+                let address = raw.baseAddress!.assumingMemoryBound(to: sockaddr.self)
+                return accept(listener, address, &addressLength)
+            }
             if clientFD == invalidSocketFD {
                 Log.debug("accept() failed; continuing.")
                 continue
             }
-            self.handleConnection(clientFD, maxFrameBytes: maxFrameBytes, onReceive: onReceive)
+            guard addressLength >= 8 else {
+                Sock.close(clientFD)
+                continue
+            }
+            // Both listeners bind AF_INET; IPv4 occupies bytes 4...7 on both platforms.
+            let peerHost = "\(peerAddress[4]).\(peerAddress[5]).\(peerAddress[6]).\(peerAddress[7])"
+            self.handleConnection(clientFD, maxFrameBytes: maxFrameBytes) { data in
+                onReceive(data, peerHost)
+            }
             Sock.close(clientFD)
         }
     }
@@ -92,10 +105,19 @@ enum Transport {
             Log.warn("Rejecting frame with implausible length \(length).")
             return
         }
+        #if os(macOS)
+            let receiveStarted = ProcessInfo.processInfo.systemUptime
+        #endif
         guard let body = recvExactly(fd, count: length) else {
             Log.debug("Connection closed before full frame arrived.")
             return
         }
+        #if os(macOS)
+            if body.first == 0 {
+                let seconds = ProcessInfo.processInfo.systemUptime - receiveStarted
+                Log.info("Received \(length)-byte image frame in \(String(format: "%.3f", seconds))s over TCP.")
+            }
+        #endif
         onReceive(Data(body))
     }
 
