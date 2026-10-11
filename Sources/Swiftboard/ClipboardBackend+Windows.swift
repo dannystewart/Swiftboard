@@ -3,13 +3,13 @@
     import Foundation
     import WinSDK
 
-    // NOTE: This file only compiles on Windows and has NOT been build-verified on a
-    // Windows toolchain from the dev machine. The Win32/WinSDK API surface (BOOL ->
-    // WindowsBool, HANDLE, GlobalAlloc/GlobalLock) is the most likely place to need
-    // small adjustments on first Windows build.
+    // NOTE: This file only compiles on Windows and has NOT been build-verified on a Windows
+    // toolchain from the dev machine. The Win32/WinSDK API surface (BOOL -> WindowsBool, HANDLE,
+    // GlobalAlloc/GlobalLock) is the most likely place to need small adjustments on first Windows
+    // build.
 
-    // Standard clipboard format identifiers. Defined locally as UINT to avoid any
-    // dependence on how the CF_* macros are (or aren't) surfaced by the overlay.
+    // Standard clipboard format identifiers. Defined locally as UINT to avoid any dependence on how
+    // the CF_* macros are (or aren't) surfaced by the overlay.
     private let cfUnicodeText: UINT = 13
     private let cfDIB: UINT = 8
     private let cfDIBV5: UINT = 17
@@ -284,4 +284,4 @@
             bytes.append(UInt8((value >> 24) & 0xFF))
         }
     }
-#endif
+#endif // os(Windows)

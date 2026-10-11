@@ -4,8 +4,8 @@ import Foundation
     import WinSDK
 
     typealias SocketFD = SOCKET
-    /// INVALID_SOCKET is a cast-style C macro Swift's importer doesn't surface, so
-    /// compute the equivalent (all bits set) directly. SOCKET is an unsigned type.
+    /// INVALID_SOCKET is a cast-style C macro Swift's importer doesn't surface, so compute the
+    /// equivalent (all bits set) directly. SOCKET is an unsigned type.
     let invalidSocketFD: SOCKET = ~0
 
     /// Initialized once, lazily and thread-safely, before any socket use.
@@ -18,23 +18,23 @@ import Foundation
 
     typealias SocketFD = Int32
     let invalidSocketFD: Int32 = -1
-#endif
+#endif // os(Windows)
 
 // MARK: - Sock
 
-/// Cross-platform socket primitives shared by the TCP data channel (Transport)
-/// and the UDP discovery beacon (Discovery). The POSIX/WinSock differences all
-/// live here so the callers stay readable.
+/// Cross-platform socket primitives shared by the TCP data channel (Transport) and the UDP
+/// discovery beacon (Discovery). The POSIX/WinSock differences all live here so the callers stay
+/// readable.
 enum Sock {
     #if os(Windows)
         static let stream: Int32 = .init(SOCK_STREAM)
         static let dgram: Int32 = .init(SOCK_DGRAM)
-        // SO_EXCLUSIVEADDRUSE is defined as a C expression that Swift cannot import.
+        /// SO_EXCLUSIVEADDRUSE is defined as a C expression that Swift cannot import.
         static let exclusiveAddrUse: Int32 = ~SO_REUSEADDR
     #else
         static let stream = SOCK_STREAM
         static let dgram = SOCK_DGRAM
-    #endif
+    #endif // os(Windows)
 
     static func prepare() {
         #if os(Windows)
@@ -42,8 +42,8 @@ enum Sock {
         #endif
     }
 
-    // bind/connect want the address length as `int` on Windows (WinSock) but as
-    // socklen_t on Darwin; socklen_t may not exist in the Windows overlay.
+    // bind/connect want the address length as `int` on Windows (WinSock) but as socklen_t on
+    // Darwin; socklen_t may not exist in the Windows overlay.
     #if os(Windows)
         static func addrLen(_ len: some BinaryInteger) -> Int32 { Int32(len) }
     #else
@@ -77,7 +77,7 @@ enum Sock {
             }
         #else
             return setsockopt(fd, SOL_SOCKET, option, &one, socklen_t(MemoryLayout<Int32>.size)) == 0
-        #endif
+        #endif // os(Windows)
     }
 
     static func setSendTimeout(_ fd: SocketFD, seconds: Int) {
@@ -91,6 +91,6 @@ enum Sock {
         #else
             var tv = timeval(tv_sec: seconds, tv_usec: 0)
             _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
-        #endif
+        #endif // os(Windows)
     }
 }

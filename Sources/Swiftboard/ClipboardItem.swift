@@ -2,9 +2,9 @@ import Foundation
 
 // MARK: - ClipboardItem
 
-/// A single clipboard payload moving between the two machines. Either UTF-8 text
-/// or a PNG image. PNG is the common wire format; each platform converts to/from
-/// its own native clipboard representation at the edges.
+/// A single clipboard payload moving between the two machines. Either UTF-8 text or a PNG image.
+/// PNG is the common wire format; each platform converts to/from its own native clipboard
+/// representation at the edges.
 struct ClipboardItem: Sendable {
     enum Kind: String, Sendable {
         case text
@@ -15,9 +15,9 @@ struct ClipboardItem: Sendable {
     let text: String?
     let imagePNG: Data?
 
-    /// Hash of the canonical content as *this* process sees it. It is recomputed
-    /// from content on both ends (never trusted from the wire) so that identical
-    /// text hashes identically on both machines.
+    /// Hash of the canonical content as *this* process sees it. It is recomputed from content on
+    /// both ends (never trusted from the wire) so that identical text hashes identically on both
+    /// machines.
     let hash: String
 
     var byteCount: Int {
@@ -56,8 +56,8 @@ struct ClipboardItem: Sendable {
 
 // MARK: Codable
 
-// JSON representation used for text frames (and accepted for images from older
-// peers). The hash is intentionally not encoded: the receiver recomputes it.
+/// JSON representation used for text frames (and accepted for images from older peers). The hash is
+/// intentionally not encoded: the receiver recomputes it.
 extension ClipboardItem: Codable {
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -100,8 +100,10 @@ extension ClipboardItem: Codable {
 
 extension ClipboardItem.Kind: Codable {}
 
-/// Text keeps its existing JSON frame. An image frame starts with a zero byte
-/// (which cannot start JSON) followed by the original PNG bytes, without base64.
+// MARK: - ClipboardWireFormat
+
+/// Text keeps its existing JSON frame. An image frame starts with a zero byte (which cannot start
+/// JSON) followed by the original PNG bytes, without base64.
 enum ClipboardWireFormat {
     private static let imageMarker: UInt8 = 0
 

@@ -1,5 +1,7 @@
 import Foundation
 
+// MARK: - SwiftboardServiceError
+
 enum SwiftboardServiceError: Error, CustomStringConvertible {
     case listener(UInt16)
     case discovery
@@ -13,6 +15,8 @@ enum SwiftboardServiceError: Error, CustomStringConvertible {
         }
     }
 }
+
+// MARK: - SwiftboardService
 
 /// Owns the long-running clipboard sync workers shared by the CLI and macOS app.
 final class SwiftboardService {
@@ -68,8 +72,8 @@ final class SwiftboardService {
                     Log.warn("Received a frame that could not be decoded.")
                     return
                 }
-                // An incoming update identifies the peer even if its UDP discovery
-                // beacons cannot reach us. Never replace an explicitly configured peer.
+                // An incoming update identifies the peer even if its UDP discovery beacons cannot
+                // reach us. Never replace an explicitly configured peer.
                 if config.peerHost == nil {
                     switch registry.markSeen(peerHost) {
                     case .discovered:
@@ -92,7 +96,7 @@ final class SwiftboardService {
                                 + "clipboard write and settle \(String(format: "%.3f", appliedAt - decodedAt))s.",
                         )
                     }
-                #endif
+                #endif // os(macOS)
             }
         }
     }

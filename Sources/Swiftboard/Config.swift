@@ -22,12 +22,12 @@ struct Config: Sendable {
     """
 
     // Set from the command line. A nil peer means discover it via UDP broadcast.
-    var peerHost: String? = nil
+    var peerHost: String?
     var port: UInt16 = 8765
     var verbose: Bool = false
 
-    // Keep a defensive bound against malformed frames without rejecting normal
-    // high-resolution screenshots.
+    // Keep a defensive bound against malformed frames without rejecting normal high-resolution
+    // screenshots.
     var maxSizeMB: Int = 100
     var pollIntervalMS: Int = 250
     var syncImages: Bool = true

@@ -19,8 +19,8 @@ struct Swiftboard {
             Log.minLevel = .debug
         }
 
-        // Do this first: the headless Windows build has no console, so the file
-        // is the only place logs can land.
+        // Do this first: the headless Windows build has no console, so the file is the only place
+        // logs can land.
         if let logPath = Log.startFileLogging() {
             Log.info("Logging to \(logPath).")
         }

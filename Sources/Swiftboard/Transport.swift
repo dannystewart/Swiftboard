@@ -8,21 +8,20 @@ import Foundation
 
 // MARK: - Transport
 
-/// Length-prefixed framing: a 4-byte big-endian payload length followed by the
-/// payload bytes. Text uses JSON; images use a marker followed by PNG bytes.
-/// One frame per clipboard update; the sender opens a fresh
-/// connection per update and closes it, which keeps the protocol stateless.
+/// Length-prefixed framing: a 4-byte big-endian payload length followed by the payload bytes. Text
+/// uses JSON; images use a marker followed by PNG bytes. One frame per clipboard update; the sender
+/// opens a fresh connection per update and closes it, which keeps the protocol stateless.
 enum Transport {
-    /// Creates the listener synchronously so startup cannot report success while
-    /// the receive path is unavailable. The bound socket also prevents a second
-    /// Swiftboard instance from starting on the same port.
+    /// Creates the listener synchronously so startup cannot report success while the receive path
+    /// is unavailable. The bound socket also prevents a second Swiftboard instance from starting on
+    /// the same port.
     static func makeListener(port: UInt16) -> SocketFD? {
         Sock.prepare()
         return self.makeBoundListener(port: port)
     }
 
-    /// Runs the accept loop forever on the calling thread. `onReceive` is invoked
-    /// on this same thread for each received frame, with the sender's IPv4 address.
+    /// Runs the accept loop forever on the calling thread. `onReceive` is invoked on this same
+    /// thread for each received frame, with the sender's IPv4 address.
     static func runServer(
         listener: SocketFD,
         maxFrameBytes: Int,
@@ -52,8 +51,8 @@ enum Transport {
         }
     }
 
-    /// Connects to the peer, sends one frame, and closes. Best-effort: logs and
-    /// returns on any failure so a sleeping/offline peer never blocks syncing.
+    /// Connects to the peer, sends one frame, and closes. Best-effort: logs and returns on any
+    /// failure so a sleeping/offline peer never blocks syncing.
     static func sendFrame(to host: String, port: UInt16, payload: Data) {
         Sock.prepare()
 
@@ -65,16 +64,17 @@ enum Transport {
         frame.append(UInt8(length & 0xFF))
         frame.append(payload)
 
-        let connection = connectTo(host: host, port: port)
+        let connection = self.connectTo(host: host, port: port)
         guard let fd = connection.fd else {
             #if os(macOS)
-                if connection.error == EHOSTUNREACH,
-                   self.sendFrameWithSystemNetcat(to: host, port: port, frame: frame)
+                if
+                    connection.error == EHOSTUNREACH,
+                    self.sendFrameWithSystemNetcat(to: host, port: port, frame: frame)
                 {
                     Log.info("Sent \(payload.count)-byte frame to \(host):\(port) using the macOS system transport.")
                     return
                 }
-            #endif
+            #endif // os(macOS)
             if let error = connection.error {
                 Log.warn(
                     "Could not connect to peer \(host):\(port) (OS error \(error)); update not delivered.",
@@ -148,7 +148,7 @@ enum Transport {
                 Sock.close(fd)
                 return nil
             }
-        #endif
+        #endif // os(Windows)
 
         let bindResult = bind(fd, info.pointee.ai_addr, Sock.addrLen(info.pointee.ai_addrlen))
         guard bindResult == 0 else {
@@ -201,8 +201,8 @@ enum Transport {
     }
 
     #if os(macOS)
-        /// macOS 27 beta can deny third-party local-network sockets with
-        /// EHOSTUNREACH while allowing the same connection through /usr/bin/nc.
+        /// macOS 27 beta can deny third-party local-network sockets with EHOSTUNREACH while
+        /// allowing the same connection through /usr/bin/nc.
         private static func sendFrameWithSystemNetcat(
             to host: String,
             port: UInt16,
@@ -227,7 +227,7 @@ enum Transport {
                 return false
             }
         }
-    #endif
+    #endif // os(macOS)
 
     // MARK: - Byte-accurate send/recv
 
@@ -238,11 +238,13 @@ enum Transport {
             while sent < bytes.count {
                 let remaining = bytes.count - sent
                 #if os(Windows)
-                    let n = send(fd, base.advanced(by: sent).assumingMemoryBound(to: CChar.self),
-                                 Int32(remaining), 0)
+                    let n = send(fd,
+                                 base.advanced(by: sent).assumingMemoryBound(to: CChar.self),
+                                 Int32(remaining),
+                                 0)
                 #else
                     let n = send(fd, base.advanced(by: sent), remaining, 0)
-                #endif
+                #endif // os(Windows)
                 if n <= 0 { return false }
                 sent += Int(n)
             }
@@ -258,11 +260,13 @@ enum Transport {
             while received < count {
                 let remaining = count - received
                 #if os(Windows)
-                    let n = recv(fd, base.advanced(by: received).assumingMemoryBound(to: CChar.self),
-                                 Int32(remaining), 0)
+                    let n = recv(fd,
+                                 base.advanced(by: received).assumingMemoryBound(to: CChar.self),
+                                 Int32(remaining),
+                                 0)
                 #else
                     let n = recv(fd, base.advanced(by: received), remaining, 0)
-                #endif
+                #endif // os(Windows)
                 if n <= 0 { return false }
                 received += Int(n)
             }

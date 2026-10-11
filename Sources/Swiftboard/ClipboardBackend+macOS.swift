@@ -65,4 +65,4 @@
             return nil
         }
     }
-#endif
+#endif // os(macOS)

@@ -7,7 +7,7 @@ import Synchronization
     import Darwin
 #endif
 
-// MARK: - PeerRegistry
+// MARK: - PeerEvent
 
 /// What a fresh beacon told us about the peer, so callers can log transitions.
 enum PeerEvent: Sendable, Equatable {
@@ -16,10 +16,12 @@ enum PeerEvent: Sendable, Equatable {
     case stillPresent // routine heartbeat, nothing to announce
 }
 
-/// Holds the current peer address and liveness. The send path reads `current()`
-/// live, so a peer that is discovered (or whose IP changes) is picked up without
-/// a restart. Beacons double as a heartbeat: `markSeen` refreshes last-seen and
-/// a watchdog calls `markStaleIfNeeded` to notice when they stop arriving.
+// MARK: - PeerRegistry
+
+/// Holds the current peer address and liveness. The send path reads `current()` live, so a peer
+/// that is discovered (or whose IP changes) is picked up without a restart. Beacons double as a
+/// heartbeat: `markSeen` refreshes last-seen and a watchdog calls `markStaleIfNeeded` to notice
+/// when they stop arriving.
 final class PeerRegistry: Sendable {
     private struct State {
         var host: String?
@@ -44,13 +46,12 @@ final class PeerRegistry: Sendable {
     /// Record a beacon from `host` and report whether it's worth announcing.
     func markSeen(_ host: String) -> PeerEvent {
         self.state.withLock { state in
-            let event: PeerEvent
-            if state.host != host {
-                event = .discovered
+            let event: PeerEvent = if state.host != host {
+                .discovered
             } else if !state.online {
-                event = .reconnected
+                .reconnected
             } else {
-                event = .stillPresent
+                .stillPresent
             }
             state.host = host
             state.lastSeen = Date()
@@ -62,9 +63,10 @@ final class PeerRegistry: Sendable {
     /// Returns true exactly once, when the peer transitions to offline.
     func markStaleIfNeeded(timeout: TimeInterval) -> Bool {
         self.state.withLock { state in
-            guard state.online, let last = state.lastSeen,
-                  Date().timeIntervalSince(last) > timeout
-            else {
+            guard
+                state.online, let last = state.lastSeen,
+                Date().timeIntervalSince(last) > timeout else
+            {
                 return false
             }
             state.online = false
@@ -75,13 +77,18 @@ final class PeerRegistry: Sendable {
 
 // MARK: - Discovery
 
-/// UDP broadcast peer discovery. Each instance periodically shouts a beacon
-/// carrying a per-run UUID and listens for the other's shout; a beacon with a
-/// different UUID reveals the peer's IP (read from the source address).
+/// UDP broadcast peer discovery. Each instance periodically shouts a beacon carrying a per-run UUID
+/// and listens for the other's shout; a beacon with a different UUID reveals the peer's IP (read
+/// from the source address).
 enum Discovery {
     private static let beaconPrefix = "SWIFTBOARD/1 "
     private static let replyPrefix = "SWIFTBOARD/1-REPLY "
     private static let interval: TimeInterval = 3
+
+    // MARK: - Liveness watchdog
+
+    /// Missing this many seconds of beacons (~3 intervals) means the peer is gone.
+    private static let livenessTimeout: TimeInterval = 10
 
     static func parseBeacon(_ text: String) -> (id: String, replyRequested: Bool)? {
         let id: String
@@ -123,7 +130,7 @@ enum Discovery {
             Log.error("Discovery socket setup failed; auto-discovery unavailable. Pass a peer address instead.")
             return false
         }
-        let destinations = resolveBroadcasts(port: port)
+        let destinations = self.resolveBroadcasts(port: port)
         guard !destinations.isEmpty else {
             Sock.close(fd)
             Log.error("Could not resolve a discovery broadcast address.")
@@ -136,11 +143,6 @@ enum Discovery {
         Thread.detachNewThread { self.livenessLoop(registry: registry) }
         return true
     }
-
-    // MARK: - Liveness watchdog
-
-    /// Missing this many seconds of beacons (~3 intervals) means the peer is gone.
-    private static let livenessTimeout: TimeInterval = 10
 
     private static func livenessLoop(registry: PeerRegistry) {
         while true {
@@ -168,8 +170,8 @@ enum Discovery {
 
         guard
             Sock.enableBoolOption(fd, SO_REUSEADDR),
-            Sock.enableBoolOption(fd, SO_BROADCAST)
-        else {
+            Sock.enableBoolOption(fd, SO_BROADCAST) else
+        {
             Sock.close(fd)
             return nil
         }
@@ -219,15 +221,15 @@ enum Discovery {
             guard getifaddrs(&interfaces) == 0, let first = interfaces else { return [] }
             defer { freeifaddrs(interfaces) }
 
-            var destinations: [(bytes: [UInt8], len: Int)] = []
+            var destinations = [(bytes: [UInt8], len: Int)]()
             var current: UnsafeMutablePointer<ifaddrs>? = first
             while let interface = current {
                 current = interface.pointee.ifa_next
                 guard
                     let address = interface.pointee.ifa_addr,
                     let netmask = interface.pointee.ifa_netmask,
-                    address.pointee.sa_family == UInt8(AF_INET)
-                else {
+                    address.pointee.sa_family == UInt8(AF_INET) else
+                {
                     continue
                 }
 
@@ -236,42 +238,43 @@ enum Discovery {
                 let maskBytes = UnsafeRawBufferPointer(start: netmask, count: length)
                 guard addressBytes[4] != 127 else { continue }
 
-                guard let bytes = self.directedBroadcast(
-                    address: addressBytes,
-                    netmask: maskBytes,
-                    port: port,
-                ) else { continue }
+                guard
+                    let bytes = self.directedBroadcast(
+                        address: addressBytes,
+                        netmask: maskBytes,
+                        port: port,
+                    ) else { continue }
                 destinations.append((bytes, length))
             }
             return destinations
-        #endif
+        #endif // os(Windows)
     }
 
     #if os(Windows)
-    /// Windows routes the limited broadcast correctly; macOS needs the directed
-    /// broadcast for each active interface instead.
-    private static func resolveLimitedBroadcast(port: UInt16) -> (bytes: [UInt8], len: Int)? {
-        var hints = addrinfo()
-        hints.ai_family = AF_INET
-        hints.ai_socktype = Sock.dgram
+        /// Windows routes the limited broadcast correctly; macOS needs the directed broadcast for each
+        /// active interface instead.
+        private static func resolveLimitedBroadcast(port: UInt16) -> (bytes: [UInt8], len: Int)? {
+            var hints = addrinfo()
+            hints.ai_family = AF_INET
+            hints.ai_socktype = Sock.dgram
 
-        var result: UnsafeMutablePointer<addrinfo>?
-        guard
-            getaddrinfo("255.255.255.255", String(port), &hints, &result) == 0,
-            let info = result, let addr = info.pointee.ai_addr else
-        {
-            return nil
-        }
-        defer { freeaddrinfo(result) }
+            var result: UnsafeMutablePointer<addrinfo>?
+            guard
+                getaddrinfo("255.255.255.255", String(port), &hints, &result) == 0,
+                let info = result, let addr = info.pointee.ai_addr else
+            {
+                return nil
+            }
+            defer { freeaddrinfo(result) }
 
-        let len = Int(info.pointee.ai_addrlen)
-        var bytes = [UInt8](repeating: 0, count: len)
-        bytes.withUnsafeMutableBytes { raw in
-            raw.baseAddress!.copyMemory(from: UnsafeRawPointer(addr), byteCount: len)
+            let len = Int(info.pointee.ai_addrlen)
+            var bytes = [UInt8](repeating: 0, count: len)
+            bytes.withUnsafeMutableBytes { raw in
+                raw.baseAddress!.copyMemory(from: UnsafeRawPointer(addr), byteCount: len)
+            }
+            return (bytes, len)
         }
-        return (bytes, len)
-    }
-    #endif
+    #endif // os(Windows)
 
     private static func sendBeacon(
         fd: SocketFD,
@@ -282,11 +285,15 @@ enum Discovery {
             let sa = addrRaw.baseAddress!.assumingMemoryBound(to: sockaddr.self)
             return message.withUnsafeBytes { msgRaw in
                 #if os(Windows)
-                    return sendto(fd, msgRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
-                                  Int32(msgRaw.count), 0, sa, Int32(dest.len)) >= 0
+                    return sendto(fd,
+                                  msgRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
+                                  Int32(msgRaw.count),
+                                  0,
+                                  sa,
+                                  Int32(dest.len)) >= 0
                 #else
                     return sendto(fd, msgRaw.baseAddress, msgRaw.count, 0, sa, socklen_t(dest.len)) >= 0
-                #endif
+                #endif // os(Windows)
             }
         }
     }
@@ -314,8 +321,8 @@ enum Discovery {
                 continue
             }
 
-            // A direct reply makes discovery work even when one platform can
-            // receive LAN broadcasts but cannot send the limited broadcast.
+            // A direct reply makes discovery work even when one platform can receive LAN broadcasts
+            // but cannot send the limited broadcast.
             if beacon.replyRequested {
                 let destination = (bytes: Array(from.prefix(fromLength)), len: fromLength)
                 let reply = Array((self.replyPrefix + myID).utf8)
@@ -324,9 +331,9 @@ enum Discovery {
                 }
             }
 
-            // The IPv4 address sits at byte offset 4 of the sockaddr on both
-            // platforms: Darwin's sin_len + sin_family (1+1) occupies the same
-            // two bytes as the 2-byte sin_family elsewhere, and sin_port is next.
+            // The IPv4 address sits at byte offset 4 of the sockaddr on both platforms: Darwin's
+            // sin_len + sin_family (1+1) occupies the same two bytes as the 2-byte sin_family
+            // elsewhere, and sin_port is next.
             let ip = "\(from[4]).\(from[5]).\(from[6]).\(from[7])"
             switch registry.markSeen(ip) {
             case .discovered:
@@ -350,14 +357,18 @@ enum Discovery {
                 let sa = fromRaw.baseAddress!.assumingMemoryBound(to: sockaddr.self)
                 #if os(Windows)
                     var fromLen = Int32(fromRaw.count)
-                    let n = recvfrom(fd, bufRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
-                                     Int32(bufRaw.count), 0, sa, &fromLen)
+                    let n = recvfrom(fd,
+                                     bufRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
+                                     Int32(bufRaw.count),
+                                     0,
+                                     sa,
+                                     &fromLen)
                     fromLength = Int(fromLen)
                 #else
                     var fromLen = socklen_t(fromRaw.count)
                     let n = recvfrom(fd, bufRaw.baseAddress, bufRaw.count, 0, sa, &fromLen)
                     fromLength = Int(fromLen)
-                #endif
+                #endif // os(Windows)
                 return Int(n)
             }
         }

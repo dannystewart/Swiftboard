@@ -3,8 +3,8 @@ import Synchronization
 
 // MARK: - Log
 
-/// Deliberately not using PolyKit here: this target has to compile and run on
-/// Windows, so it stays dependency-free. This is a bare stderr + file logger.
+/// Deliberately not using PolyKit here: this target has to compile and run on Windows, so it stays
+/// dependency-free. This is a bare stderr + file logger.
 enum Log {
     enum Level: Int, Sendable {
         case debug = 0
@@ -25,14 +25,14 @@ enum Log {
     /// Adjustable at startup via --verbose. Reads are racy but harmless.
     nonisolated(unsafe) static var minLevel: Level = .info
 
-    /// Optional file sink. The headless Windows build has no stderr, so without
-    /// this every log line is silently dropped. Guarded so the poll, receive,
-    /// and discovery threads never interleave partial lines.
+    /// Optional file sink. The headless Windows build has no stderr, so without this every log line
+    /// is silently dropped. Guarded so the poll, receive, and discovery threads never interleave
+    /// partial lines.
     private static let fileSink: Mutex<FileHandle?> = .init(nil)
 
-    /// Opens (creating if needed) a log file at a per-platform default location
-    /// so headless runs still leave a trace. Best-effort: on failure we simply
-    /// keep stderr-only. Returns the path in use, for logging back to the user.
+    /// Opens (creating if needed) a log file at a per-platform default location so headless runs
+    /// still leave a trace. Best-effort: on failure we simply keep stderr-only. Returns the path in
+    /// use, for logging back to the user.
     @discardableResult
     static func startFileLogging() -> String? {
         let url = self.defaultLogFileURL()
@@ -54,25 +54,12 @@ enum Log {
         }
     }
 
-    private static func defaultLogFileURL() -> URL {
-        #if os(Windows)
-            let env = ProcessInfo.processInfo.environment
-            let base = env["LOCALAPPDATA"] ?? env["TEMP"] ?? "."
-            return URL(fileURLWithPath: base)
-                .appendingPathComponent("Swiftboard")
-                .appendingPathComponent("swiftboard.log")
-        #else
-            return FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Logs/swiftboard.log")
-        #endif
-    }
-
     static func log(_ level: Level, _ message: String) {
         guard level.rawValue >= self.minLevel.rawValue else { return }
         let stamp = self.timestamp()
         let line = Data("\(stamp) [\(level.label)] \(message)\n".utf8)
-        // Use the throwing variant with try? so we no-op instead of trapping when
-        // there is no valid stderr (e.g. the headless Windows GUI-subsystem build).
+        // Use the throwing variant with try? so we no-op instead of trapping when there is no valid
+        // stderr (e.g. the headless Windows GUI-subsystem build).
         try? FileHandle.standardError.write(contentsOf: line)
         self.fileSink.withLock { handle in
             try? handle?.write(contentsOf: line)
@@ -84,6 +71,20 @@ enum Log {
     static func warn(_ message: @autoclosure () -> String) { self.log(.warn, message()) }
     static func error(_ message: @autoclosure () -> String) { self.log(.error, message()) }
 
+    private static func defaultLogFileURL() -> URL {
+        #if os(Windows)
+            let env = ProcessInfo.processInfo.environment
+            let base = env["LOCALAPPDATA"] ?? env["TEMP"] ?? "."
+            return URL(fileURLWithPath: base)
+                .appendingPathComponent("Swiftboard")
+                .appendingPathComponent("swiftboard.log")
+        #else
+            return FileManager.default
+                .homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Logs/swiftboard.log")
+        #endif // os(Windows)
+    }
+
     private static func timestamp() -> String {
         let now = Date()
         let f = DateFormatter()
@@ -92,9 +93,9 @@ enum Log {
     }
 }
 
-/// FNV-1a 64-bit. Not cryptographic, but stable and identical across platforms,
-/// which is all we need to detect "did the clipboard content change" and to
-/// deduplicate. Returns a zero-padded 16-char hex string.
+/// FNV-1a 64-bit. Not cryptographic, but stable and identical across platforms, which is all we
+/// need to detect "did the clipboard content change" and to deduplicate. Returns a zero-padded
+/// 16-char hex string.
 func contentHash(_ bytes: some Sequence<UInt8>) -> String {
     var hash: UInt64 = 0xCBF2_9CE4_8422_2325
     let prime: UInt64 = 0x0000_0100_0000_01B3
