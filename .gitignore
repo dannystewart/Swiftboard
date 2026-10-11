@@ -1,8 +1,53 @@
+# Build artifacts
+.build/
+build/
+DerivedData/
+.swiftlint_cache/
+
+# Swift package files
+.swiftpm/
+Packages/
+
+# Supabase
+**/supabase/.temp
+
+# Xcode user data (keeping bookmarks)
+**/xcuserdata/*
+!**/xcuserdata/*.xcuserdatad/
+**/xcuserdata/*.xcuserdatad/*
+!**/xcuserdata/*.xcuserdatad/Bookmarks/
+**/xcuserdata/*.xcuserdatad/Bookmarks/*
+!**/xcuserdata/*.xcuserdatad/Bookmarks/bookmarks.plist
+**/UserInterfaceState.xcuserstate
+
+# Generated configuration
+Config/BuildNumber.xcconfig
+Config/Secrets.xcconfig
+
+# Development tools
+.claude/
+.codex/
+.cursor/
+.cursorindexingignore
+.firecrawl/
+.nova/
+.pi-lens/
+.sisyphus/
+.specstory/
+
+# Local development
 .DS_Store
+.env
+*.tmp
+
+# Release artifacts (keeping release notes)
+Releases/*
+!Releases/*.md
+
+# Other
 /.build
 /Packages
 xcuserdata/
-DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc

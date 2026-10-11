@@ -14,6 +14,7 @@
 		000000000000000000000120 /* Swiftboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Swiftboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		301E886C3027A8DF0007C1CD /* SwiftboardIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = SwiftboardIcon.icon; sourceTree = "<group>"; };
 		301E88C63027ABAC0007C1CD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		F270B3484D974FF19A6A8204 /* BuildNumber.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = BuildNumber.xcconfig; path = Config/BuildNumber.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -56,6 +57,7 @@
 		000000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				F270B3484D974FF19A6A8204 /* BuildNumber.xcconfig */,
 				000000000000000000000010 /* Swiftboard */,
 				000000000000000000000011 /* Swiftboard Sources */,
 				301E886C3027A8DF0007C1CD /* SwiftboardIcon.icon */,
@@ -280,6 +282,7 @@
 		};
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "Swiftboard" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F270B3484D974FF19A6A8204 /* BuildNumber.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = SwiftboardIcon;
 				CODE_SIGN_STYLE = Automatic;
@@ -313,6 +316,7 @@
 		};
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "Swiftboard" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F270B3484D974FF19A6A8204 /* BuildNumber.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = SwiftboardIcon;
 				CODE_SIGN_STYLE = Automatic;

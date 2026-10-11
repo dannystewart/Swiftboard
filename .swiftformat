@@ -64,7 +64,7 @@
 --max-width none
 --modifier-order
 --never-trailing
---nil-init insert
+--nil-init remove
 --no-space-operators
 --no-wrap-operators
 --non-complex-attributes
@@ -75,7 +75,7 @@
 --pattern-let hoist
 --prefer-synthesized-init-for-internal-structs View,ViewModifier
 --preserve-acronyms
---preserve-decls
+--preserve-decls applicationDelegate
 --preserved-property-types Package
 --property-types infer-locals-only
 --ranges spaced

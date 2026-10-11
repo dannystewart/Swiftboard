@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme
+   LastUpgradeVersion = "2700"
+   version = "1.7">
+   <BuildAction
+      parallelizeBuildables = "YES"
+      buildImplicitDependencies = "YES"
+      buildArchitectures = "Automatic">
+      <PreActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Generate Build Number"
+               scriptText = "#!/bin/sh&#10;set -e&#10;&#10;if [ -n &quot;$CI&quot; ]; then&#10;  exit 0&#10;fi&#10;&#10;unset SWIFT_DEBUG_INFORMATION_FORMAT&#10;unset SWIFT_DEBUG_INFORMATION_VERSION&#10;&#10;# Manual offset in case commit count decreases&#10;OFFSET=0&#10;&#10;# Figure out paths&#10;CONFIG_DIR=&quot;${PROJECT_DIR}/Config&quot;&#10;BUILD_CONFIG=&quot;${CONFIG_DIR}/BuildNumber.xcconfig&quot;&#10;&#10;cd &quot;$PROJECT_DIR&quot;&#10;mkdir -p &quot;$CONFIG_DIR&quot;&#10;&#10;# Generate build number from commit count + offset&#10;COMMIT_COUNT=$(git -C &quot;$PROJECT_DIR&quot; rev-list --count HEAD 2&gt;/dev/null || echo 1)&#10;BUILD_NUMBER=$((COMMIT_COUNT + OFFSET))&#10;&#10;# Determine dirty/clean status and working tree hash&#10;IS_DIRTY=false&#10;if ! git -C &quot;$PROJECT_DIR&quot; diff --quiet || ! git -C &quot;$PROJECT_DIR&quot; diff --cached --quiet; then&#10;  IS_DIRTY=true&#10;fi&#10;&#10;# Get working tree hash&#10;STATUS=$(git status --porcelain=v1 --untracked-files=all)&#10;DIFF=$(git diff HEAD)&#10;BUILD_WORKING_HASH=$(printf &quot;%s\n%s&quot; &quot;$STATUS&quot; &quot;$DIFF&quot; | shasum | cut -c1-3)&#10;&#10;# Write values back to BuildNumber.xcconfig&#10;cat &gt; &quot;$BUILD_CONFIG&quot; &lt;&lt;EOF&#10;// Auto-generated. Do not edit by hand.&#10;&#10;CURRENT_PROJECT_VERSION = $BUILD_NUMBER&#10;BUILD_IS_DIRTY = $IS_DIRTY&#10;BUILD_WORKING_HASH = $BUILD_WORKING_HASH&#10;EOF">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                      BlueprintIdentifier = "000000000000000100000000"
+                      BuildableName = "Swiftboard.app"
+                      BlueprintName = "Swiftboard"
+                      ReferencedContainer = "container:Swiftboard.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
+      <BuildActionEntries>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+                BlueprintIdentifier = "000000000000000100000000"
+                BuildableName = "Swiftboard.app"
+                BlueprintName = "Swiftboard"
+                ReferencedContainer = "container:Swiftboard.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      shouldUseLaunchSchemeArgsEnv = "YES">
+   </TestAction>
+   <LaunchAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      launchStyle = "0"
+      useCustomWorkingDirectory = "NO"
+      ignoresPersistentStateOnLaunch = "NO"
+      debugDocumentVersioning = "YES"
+      debugServiceExtension = "internal"
+      allowLocationSimulation = "YES"
+      queueDebuggingEnabled = "No">
+      <BuildableProductRunnable runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+             BlueprintIdentifier = "000000000000000100000000"
+             BuildableName = "Swiftboard.app"
+             BlueprintName = "Swiftboard"
+             ReferencedContainer = "container:Swiftboard.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </LaunchAction>
+   <ProfileAction
+      buildConfiguration = "Release"
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      savedToolIdentifier = ""
+      useCustomWorkingDirectory = "NO"
+      debugDocumentVersioning = "YES">
+      <BuildableProductRunnable runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+             BlueprintIdentifier = "000000000000000100000000"
+             BuildableName = "Swiftboard.app"
+             BlueprintName = "Swiftboard"
+             ReferencedContainer = "container:Swiftboard.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction buildConfiguration = "Debug">
+   </AnalyzeAction>
+   <ArchiveAction
+      buildConfiguration = "Release"
+      revealArchiveInOrganizer = "YES">
+   </ArchiveAction>
+</Scheme>
