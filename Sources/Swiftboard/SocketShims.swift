@@ -93,4 +93,27 @@ enum Sock {
             _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
         #endif // os(Windows)
     }
+
+    static func setReceiveTimeout(_ fd: SocketFD, seconds: Int) {
+        #if os(Windows)
+            var ms = DWORD(seconds * 1000)
+            withUnsafePointer(to: &ms) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: MemoryLayout<DWORD>.size) { cptr in
+                    _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, cptr, Int32(MemoryLayout<DWORD>.size))
+                }
+            }
+        #else
+            var tv = timeval(tv_sec: seconds, tv_usec: 0)
+            _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        #endif
+    }
+
+    static func prepareStream(_ fd: SocketFD) {
+        self.setSendTimeout(fd, seconds: 30)
+        self.setReceiveTimeout(fd, seconds: 30)
+        #if os(macOS)
+            // A peer disappearing mid-frame must fail the transfer, not terminate Swiftboard.
+            _ = self.enableBoolOption(fd, SO_NOSIGPIPE)
+        #endif
+    }
 }

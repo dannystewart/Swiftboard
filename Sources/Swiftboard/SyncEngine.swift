@@ -37,54 +37,65 @@ final class SyncEngine: Sendable {
     /// Called on each poll tick. Reads the clipboard only when the cheap change token moved, and
     /// only sends when the content hash is genuinely new.
     func pollLocal() {
-        let itemToSend: ClipboardItem? = self.state.withLock { s in
-            let token = self.backend.changeToken()
-            if let last = s.lastToken, last == token {
-                return nil
-            }
-            s.lastToken = token
-
-            guard
-                let item = backend.read(
-                    maxBytes: config.maxSizeBytes,
-                    syncImages: config.syncImages,
-                ) else
-            {
-                return nil
-            }
-            if s.lastHash == item.hash {
-                return nil
-            }
-            s.lastHash = item.hash
-            return item
-        }
-
-        if let itemToSend {
-            Log.info("Local clipboard changed: \(itemToSend.summary); sending to peer.")
-            self.sendToPeer(itemToSend)
+        self.state.withLock { s in
+            self.captureLocal(state: &s)
         }
     }
 
     /// Called on the receive thread when a frame arrives from the peer.
-    func applyRemote(_ item: ClipboardItem) {
+    func applyRemote(_ item: ClipboardItem) -> Bool {
         self.state.withLock { s in
+            // Don't overwrite a local copy made since the last poll without first saving it.
+            self.captureLocal(state: &s)
             if let existing = s.lastHash, existing == item.hash {
                 Log.debug("Ignoring peer update; identical content already present.")
-                return
+                return true
             }
 
             Log.info("Received \(item.summary) from peer; updating local clipboard.")
-            self.backend.write(item)
+            guard self.backend.write(item) else {
+                // A failed write can still clear/change the clipboard. Don't echo partial state.
+                s.lastToken = self.backend.changeToken()
+                s.lastHash = nil
+                return false
+            }
 
             // Re-read so our dedup state reflects how *this* platform now sees the clipboard.
             // Prevents the poll loop from echoing it back, even when re-encoding produces different
             // bytes than the sender had.
+            let appliedToken = self.backend.changeToken()
             let settled = self.backend.read(
                 maxBytes: self.config.maxSizeBytes,
                 syncImages: self.config.syncImages,
             )
-            s.lastToken = self.backend.changeToken()
-            s.lastHash = settled?.hash ?? item.hash
+            s.lastToken = appliedToken
+            s.lastHash = self.backend.changeToken() == appliedToken ? (settled?.hash ?? item.hash) : item.hash
+            return true
         }
+    }
+
+    /// Must stay cheap after the snapshot: sendToPeer enqueues, never performs network I/O.
+    private func captureLocal(state s: inout State) {
+        let token = self.backend.changeToken()
+        if let last = s.lastToken, last == token {
+            return
+        }
+
+        guard
+            let item = backend.read(
+                maxBytes: config.maxSizeBytes,
+                syncImages: config.syncImages,
+            ) else
+        {
+            // A busy clipboard or a screenshot still being published should be retried on
+            // the next tick, not marked as captured.
+            return
+        }
+        s.lastToken = token
+        if s.lastHash == item.hash {
+            return
+        }
+        s.lastHash = item.hash
+        self.sendToPeer(item)
     }
 }

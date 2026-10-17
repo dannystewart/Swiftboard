@@ -29,24 +29,23 @@
             return nil
         }
 
-        func write(_ item: ClipboardItem) {
+        func write(_ item: ClipboardItem) -> Bool {
             let pb = NSPasteboard.general
             switch item.kind {
             case .text:
                 pb.clearContents()
-                pb.setString(item.text ?? "", forType: .string)
+                return pb.setString(item.text ?? "", forType: .string)
 
             case .image:
-                guard let png = item.imagePNG else { return }
-                pb.clearContents()
+                guard let png = item.imagePNG, let rep = NSBitmapImageRep(data: png) else { return false }
                 // Write PNG plus a TIFF fallback, since some apps only read TIFF.
-                pb.setData(png, forType: .png)
-                if
-                    let rep = NSBitmapImageRep(data: png),
-                    let tiff = rep.tiffRepresentation
-                {
-                    pb.setData(tiff, forType: .tiff)
+                let entry = NSPasteboardItem()
+                guard entry.setData(png, forType: .png) else { return false }
+                if let tiff = rep.tiffRepresentation {
+                    entry.setData(tiff, forType: .tiff)
                 }
+                pb.clearContents()
+                return pb.writeObjects([entry])
             }
         }
 

@@ -47,25 +47,26 @@
             return nil
         }
 
-        func write(_ item: ClipboardItem) {
+        func write(_ item: ClipboardItem) -> Bool {
             guard self.openClipboardWithRetry() else {
-                Log.warn("Could not open clipboard to write; dropping update.")
-                return
+                Log.warn("Could not open clipboard to write; sender will retry.")
+                return false
             }
             defer { CloseClipboard() }
 
             guard EmptyClipboard() else {
-                Log.warn("EmptyClipboard failed; dropping update.")
-                return
+                Log.warn("EmptyClipboard failed; sender will retry.")
+                return false
             }
 
             switch item.kind {
             case .text:
-                self.writeUnicodeText(item.text ?? "")
+                return self.writeUnicodeText(item.text ?? "")
             case .image:
                 if let png = item.imagePNG {
-                    self.writeImagePNG(png)
+                    return self.writeImagePNG(png)
                 }
+                return false
             }
         }
 
@@ -94,14 +95,14 @@
             return String(decodingCString: ptr, as: UTF16.self)
         }
 
-        private func writeUnicodeText(_ text: String) {
+        private func writeUnicodeText(_ text: String) -> Bool {
             var utf16 = Array(text.utf16)
             utf16.append(0) // null terminator
             let byteCount = utf16.count * MemoryLayout<UInt16>.size
-            guard let handle = GlobalAlloc(gmemMoveable, SIZE_T(byteCount)) else { return }
+            guard let handle = GlobalAlloc(gmemMoveable, SIZE_T(byteCount)) else { return false }
             guard let dest = GlobalLock(handle) else {
                 GlobalFree(handle)
-                return
+                return false
             }
             utf16.withUnsafeBytes { src in
                 dest.copyMemory(from: src.baseAddress!, byteCount: byteCount)
@@ -110,7 +111,9 @@
             // On success the system owns the handle; do not free it.
             if SetClipboardData(cfUnicodeText, handle) == nil {
                 GlobalFree(handle)
+                return false
             }
+            return true
         }
 
         // MARK: - Image (read)
@@ -186,7 +189,7 @@
 
         // MARK: - Image (write)
 
-        private func writeImagePNG(_ png: Data) {
+        private func writeImagePNG(_ png: Data) -> Bool {
             var width: Int32 = 0
             var height: Int32 = 0
             let rgba: UnsafeMutablePointer<UInt8>? = png.withUnsafeBytes { raw in
@@ -199,7 +202,7 @@
             }
             guard let rgba, width > 0, height > 0 else {
                 Log.warn("Failed to decode incoming PNG for clipboard write.")
-                return
+                return false
             }
             defer { cstb_free(rgba) }
 
@@ -207,10 +210,10 @@
             let h = Int(height)
             let dib = self.buildBGRADIB(rgba: rgba, width: w, height: h)
 
-            guard let handle = GlobalAlloc(gmemMoveable, SIZE_T(dib.count)) else { return }
+            guard let handle = GlobalAlloc(gmemMoveable, SIZE_T(dib.count)) else { return false }
             guard let dest = GlobalLock(handle) else {
                 GlobalFree(handle)
-                return
+                return false
             }
             dib.withUnsafeBytes { src in
                 dest.copyMemory(from: src.baseAddress!, byteCount: dib.count)
@@ -218,7 +221,9 @@
             GlobalUnlock(handle)
             if SetClipboardData(cfDIB, handle) == nil {
                 GlobalFree(handle)
+                return false
             }
+            return true
         }
 
         /// Build a 32bpp BI_RGB DIB: BITMAPINFOHEADER + bottom-up BGRA rows.

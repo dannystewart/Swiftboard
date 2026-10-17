@@ -5,6 +5,7 @@ A small cross-platform clipboard agent that keeps two machines on the same LAN i
 ## Features
 
 - Syncs **text and images** (images travel as PNG on the wire).
+- **Ordered transfer queue** — captures copies while a transfer is in progress and retries each item until the peer acknowledges it.
 - **Auto-discovery** over UDP broadcast — no need to know the other machine's IP.
 - **Liveness reporting** — logs when the peer goes offline and comes back.
 - **No echo / ping-pong** — an update received from the peer is never bounced back.
@@ -13,14 +14,15 @@ A small cross-platform clipboard agent that keeps two machines on the same LAN i
 ## How it works
 
 - A background loop polls the OS clipboard, using a cheap change token (`NSPasteboard.changeCount` on macOS, `GetClipboardSequenceNumber` on Windows) so it only reads when something actually changed.
-- On a real change, the item is pushed to the peer over a length-prefixed TCP frame: text as JSON, images as raw PNG bytes (with a one-byte type marker, no base64).
-- A TCP server receives frames and writes them to the local clipboard.
+- On a real change, an immutable snapshot is added to an in-memory FIFO. A single sending worker sends one item at a time over a length-prefixed TCP frame: a transfer envelope with a UUID contains text as JSON or images as raw PNG bytes (no base64).
+- A TCP server receives frames and writes them to the local clipboard. It acknowledges successful application after a 500 ms gap to give clipboard managers time to capture the item before the next transfer. This gap is a courtesy, not confirmation from the clipboard manager.
+- The sender removes an item only after acknowledgement. Missing discovery, connection failures, interrupted transfers, and clipboard write failures leave it queued for retry. The receiver remembers the last applied transfer UUID so a lost acknowledgement does not cause a duplicate write. Clipboard polling runs independently of network sends.
 - Echo suppression: after applying a received item, the local clipboard is re-read and its hash/token recorded, so the poll loop recognizes it as "already have this" rather than re-broadcasting it. This holds even for images, whose bytes differ after a round-trip through each platform's clipboard.
 - Discovery: each instance broadcasts a `SWIFTBOARD/1 <uuid>` beacon every few seconds and listens for the other's. A beacon with a different UUID reveals the peer's address. The same beacons double as a heartbeat for liveness. A valid incoming TCP update also teaches the receiver the peer's address if UDP discovery is one-way.
 
 Platform specifics live behind a `ClipboardBackend` protocol: macOS uses `NSPasteboard` / `NSBitmapImageRep`; Windows uses the Win32 clipboard API with a small stb-based C shim (`Sources/CSTBImage`) to convert between the clipboard's DIB format and PNG.
 
-Update both machines when upgrading from a JSON-only build: the new build can receive older JSON image frames, but the old build cannot receive the new binary image frames.
+Update both machines together for acknowledged queue delivery. New builds still accept older frames, but older receivers cannot decode the new transfer envelope or acknowledge delivery.
 
 ## Requirements
 
@@ -117,3 +119,6 @@ The Xcode target uses automatic signing with the development team configured in 
 - Designed for exactly **two** peers.
 - Plain text and images only; rich text (RTF) falls back to plain text on macOS and is ignored on Windows.
 - LAN only; discovery relies on UDP broadcast reaching the other machine.
+- Pending transfers are kept in memory only and are lost when Swiftboard exits. The queue has no item limit; a long offline session with many large screenshots can consume substantial memory.
+- Only clipboard states observed by the poller can be queued. Copies overwritten between polls (or while the OS is still supplying/encoding an image) cannot be recovered. The current poll interval is 250 ms; items above the 100 MiB payload limit are skipped.
+- Acknowledgement confirms clipboard application, not capture by a separate clipboard manager. Retry deduplication is in-memory and resets when the receiver restarts.

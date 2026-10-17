@@ -38,18 +38,9 @@ final class SwiftboardService {
         }
 
         let backend = ClipboardBackendFactory.make()
+        let outgoing = TransferQueue()
         let engine = SyncEngine(backend: backend, config: config) { item in
-            guard let host = registry.current() else {
-                Log.debug("No peer known yet; holding clipboard update.")
-                return
-            }
-            guard let payload = ClipboardWireFormat.encode(item) else {
-                Log.warn("Failed to encode clipboard item; not sending.")
-                return
-            }
-            Thread.detachNewThread {
-                Transport.sendFrame(to: host, port: port, payload: payload)
-            }
+            outgoing.enqueue(item)
         }
         self.engine = engine
 
@@ -64,14 +55,20 @@ final class SwiftboardService {
         }
 
         Thread.detachNewThread {
-            Transport.runServer(listener: listener, maxFrameBytes: config.maxFrameBytes) { data, peerHost in
-                #if os(macOS)
-                    let processingStarted = ProcessInfo.processInfo.systemUptime
-                #endif
-                guard let item = ClipboardWireFormat.decode(data, maxImageBytes: config.maxSizeBytes) else {
-                    Log.warn("Received a frame that could not be decoded.")
-                    return
+            while true {
+                outgoing.waitForWork()
+                let delivered = outgoing.deliverNext { entry in
+                    guard let host = registry.current(), let payload = entry.payload else { return false }
+                    return Transport.sendFrame(to: host, port: port, payload: payload)
                 }
+                // Retry the same head after failures, without tying up clipboard capture.
+                if !delivered { Thread.sleep(forTimeInterval: 1.0) }
+            }
+        }
+
+        Thread.detachNewThread {
+            var receiver = TransferReceiver()
+            Transport.runServer(listener: listener, maxFrameBytes: config.maxFrameBytes) { data, peerHost in
                 // An incoming update identifies the peer even if its UDP discovery beacons cannot
                 // reach us. Never replace an explicitly configured peer.
                 if config.peerHost == nil {
@@ -84,19 +81,13 @@ final class SwiftboardService {
                         break
                     }
                 }
-                #if os(macOS)
-                    let decodedAt = ProcessInfo.processInfo.systemUptime
-                #endif
-                engine.applyRemote(item)
-                #if os(macOS)
-                    if item.kind == .image {
-                        let appliedAt = ProcessInfo.processInfo.systemUptime
-                        Log.info(
-                            "Image processing: decode \(String(format: "%.3f", decodedAt - processingStarted))s, "
-                                + "clipboard write and settle \(String(format: "%.3f", appliedAt - decodedAt))s.",
-                        )
-                    }
-                #endif // os(macOS)
+                return receiver.receive(data, maxBytes: config.maxSizeBytes) { item in
+                    guard engine.applyRemote(item) else { return false }
+                    // Keep this item on the clipboard before allowing the next transfer. The
+                    // state lock is released so local copies can still be captured during this gap.
+                    Thread.sleep(forTimeInterval: 0.5)
+                    return true
+                }
             }
         }
     }

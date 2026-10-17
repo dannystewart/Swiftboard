@@ -10,7 +10,7 @@ import Foundation
 
 /// Length-prefixed framing: a 4-byte big-endian payload length followed by the payload bytes. Text
 /// uses JSON; images use a marker followed by PNG bytes. One frame per clipboard update; the sender
-/// opens a fresh connection per update and closes it, which keeps the protocol stateless.
+/// opens a fresh connection per attempt and waits for an acknowledgement after clipboard apply.
 enum Transport {
     /// Creates the listener synchronously so startup cannot report success while the receive path
     /// is unavailable. The bound socket also prevents a second Swiftboard instance from starting on
@@ -25,7 +25,7 @@ enum Transport {
     static func runServer(
         listener: SocketFD,
         maxFrameBytes: Int,
-        onReceive: @escaping (Data, String) -> Void,
+        onReceive: @escaping (Data, String) -> Bool,
     ) {
         while true {
             var peerAddress = [UInt8](repeating: 0, count: 128) // sockaddr_storage
@@ -44,6 +44,7 @@ enum Transport {
             }
             // Both listeners bind AF_INET; IPv4 occupies bytes 4...7 on both platforms.
             let peerHost = "\(peerAddress[4]).\(peerAddress[5]).\(peerAddress[6]).\(peerAddress[7])"
+            Sock.prepareStream(clientFD)
             self.handleConnection(clientFD, maxFrameBytes: maxFrameBytes) { data in
                 onReceive(data, peerHost)
             }
@@ -51,9 +52,8 @@ enum Transport {
         }
     }
 
-    /// Connects to the peer, sends one frame, and closes. Best-effort: logs and returns on any
-    /// failure so a sleeping/offline peer never blocks syncing.
-    static func sendFrame(to host: String, port: UInt16, payload: Data) {
+    /// Success requires an application acknowledgement, not just a successful socket write.
+    static func sendFrame(to host: String, port: UInt16, payload: Data) -> Bool {
         Sock.prepare()
 
         var frame = Data(capacity: payload.count + 4)
@@ -72,22 +72,24 @@ enum Transport {
                     self.sendFrameWithSystemNetcat(to: host, port: port, frame: frame)
                 {
                     Log.info("Sent \(payload.count)-byte frame to \(host):\(port) using the macOS system transport.")
-                    return
+                    return true
                 }
             #endif // os(macOS)
             if let error = connection.error {
                 Log.warn(
-                    "Could not connect to peer \(host):\(port) (OS error \(error)); update not delivered.",
+                    "Could not connect to peer \(host):\(port) (OS error \(error)); update remains queued.",
                 )
             }
-            return
+            return false
         }
         defer { Sock.close(fd) }
 
-        if self.sendAll(fd, frame) {
-            Log.info("Sent \(payload.count)-byte frame to \(host):\(port).")
+        if self.sendAll(fd, frame), self.recvExactly(fd, count: 1) == [6] {
+            Log.info("Peer acknowledged \(payload.count)-byte frame at \(host):\(port).")
+            return true
         } else {
-            Log.warn("Failed while sending to \(host):\(port).")
+            Log.warn("Transfer to \(host):\(port) was not acknowledged; update remains queued.")
+            return false
         }
     }
 
@@ -96,7 +98,7 @@ enum Transport {
     private static func handleConnection(
         _ fd: SocketFD,
         maxFrameBytes: Int,
-        onReceive: (Data) -> Void,
+        onReceive: (Data) -> Bool,
     ) {
         guard let header = recvExactly(fd, count: 4) else { return }
         let length =
@@ -113,12 +115,14 @@ enum Transport {
             return
         }
         #if os(macOS)
-            if body.first == 0 {
+            if body.first == 0 || (body.first == 1 && body.count > 37 && body[37] == 0) {
                 let seconds = ProcessInfo.processInfo.systemUptime - receiveStarted
                 Log.info("Received \(length)-byte image frame in \(String(format: "%.3f", seconds))s over TCP.")
             }
         #endif
-        onReceive(Data(body))
+        if onReceive(Data(body)) {
+            _ = self.sendAll(fd, Data([6]))
+        }
     }
 
     // MARK: - Socket setup
@@ -183,7 +187,7 @@ enum Transport {
             let address = current.pointee
             let fd = socket(address.ai_family, address.ai_socktype, address.ai_protocol)
             if fd != invalidSocketFD {
-                Sock.setSendTimeout(fd, seconds: 30)
+                Sock.prepareStream(fd)
                 if connect(fd, address.ai_addr, Sock.addrLen(address.ai_addrlen)) == 0 {
                     return (fd, nil)
                 }
@@ -210,20 +214,31 @@ enum Transport {
         ) -> Bool {
             let process = Process()
             let input = Pipe()
+            let output = Pipe()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
             process.arguments = ["-w", "30", host, String(port)]
             process.standardInput = input
-            process.standardOutput = FileHandle.nullDevice
+            process.standardOutput = output
             process.standardError = FileHandle.nullDevice
+            defer { try? output.fileHandleForReading.close() }
 
             do {
                 try process.run()
+                // Close the parent's copy so a failed child produces EOF rather than leaving
+                // the acknowledgement read blocked on our own still-open pipe writer.
+                try output.fileHandleForWriting.close()
                 try input.fileHandleForWriting.write(contentsOf: frame)
                 try input.fileHandleForWriting.close()
+                let acknowledgement = output.fileHandleForReading.readData(ofLength: 1)
                 process.waitUntilExit()
-                return process.terminationStatus == 0
+                return process.terminationStatus == 0 && acknowledgement == Data([6])
             } catch {
                 try? input.fileHandleForWriting.close()
+                try? output.fileHandleForWriting.close()
+                if process.isRunning {
+                    process.terminate()
+                    process.waitUntilExit()
+                }
                 return false
             }
         }
