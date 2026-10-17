@@ -105,7 +105,7 @@ enum Sock {
         #else
             var tv = timeval(tv_sec: seconds, tv_usec: 0)
             _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
-        #endif
+        #endif // os(Windows)
     }
 
     static func prepareStream(_ fd: SocketFD) {

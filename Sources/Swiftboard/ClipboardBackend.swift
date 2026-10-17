@@ -16,8 +16,8 @@ protocol ClipboardBackend: Sendable {
     /// maxBytes.
     func read(maxBytes: Int, syncImages: Bool) -> ClipboardItem?
 
-    /// Replace the clipboard contents with the given item. Only report success once the OS
-    /// accepts the contents; failures must leave the sender's transfer queued for retry.
+    /// Replace the clipboard contents with the given item. Only report success once the OS accepts
+    /// the contents; failures must leave the sender's transfer queued for retry.
     func write(_ item: ClipboardItem) -> Bool
 }
 

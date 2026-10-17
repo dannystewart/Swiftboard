@@ -87,8 +87,8 @@ final class SyncEngine: Sendable {
                 syncImages: config.syncImages,
             ) else
         {
-            // A busy clipboard or a screenshot still being published should be retried on
-            // the next tick, not marked as captured.
+            // A busy clipboard or a screenshot still being published should be retried on the next
+            // tick, not marked as captured.
             return
         }
         s.lastToken = token

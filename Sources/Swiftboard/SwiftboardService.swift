@@ -83,8 +83,8 @@ final class SwiftboardService {
                 }
                 return receiver.receive(data, maxBytes: config.maxSizeBytes) { item in
                     guard engine.applyRemote(item) else { return false }
-                    // Keep this item on the clipboard before allowing the next transfer. The
-                    // state lock is released so local copies can still be captured during this gap.
+                    // Keep this item on the clipboard before allowing the next transfer. The state
+                    // lock is released so local copies can still be captured during this gap.
                     Thread.sleep(forTimeInterval: 0.5)
                     return true
                 }

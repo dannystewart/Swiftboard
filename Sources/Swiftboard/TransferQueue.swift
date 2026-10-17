@@ -4,8 +4,8 @@ import Synchronization
 
 // MARK: - TransferQueue
 
-/// Owns immutable clipboard snapshots. Only the delivery worker performs network I/O; capture
-/// never waits for a transfer, and a failed head item stays ahead of every later copy.
+/// Owns immutable clipboard snapshots. Only the delivery worker performs network I/O; capture never
+/// waits for a transfer, and a failed head item stays ahead of every later copy.
 final class TransferQueue: Sendable {
     struct Entry: Sendable {
         let id: UUID = .init()
@@ -56,8 +56,8 @@ final class TransferQueue: Sendable {
 
 // MARK: - TransferReceiver
 
-/// Accessed only by the serial receive worker. Remember transfer identities rather than content:
-/// a retry must not replay an old clipboard over a newer local copy.
+/// Accessed only by the serial receive worker. Remember transfer identities rather than content: a
+/// retry must not replay an old clipboard over a newer local copy.
 struct TransferReceiver {
     private var lastDeliveredID: UUID?
 

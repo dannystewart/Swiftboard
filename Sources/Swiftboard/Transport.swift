@@ -224,8 +224,8 @@ enum Transport {
 
             do {
                 try process.run()
-                // Close the parent's copy so a failed child produces EOF rather than leaving
-                // the acknowledgement read blocked on our own still-open pipe writer.
+                // Close the parent's copy so a failed child produces EOF rather than leaving the
+                // acknowledgement read blocked on our own still-open pipe writer.
                 try output.fileHandleForWriting.close()
                 try input.fileHandleForWriting.write(contentsOf: frame)
                 try input.fileHandleForWriting.close()

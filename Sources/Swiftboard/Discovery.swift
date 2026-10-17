@@ -251,8 +251,8 @@ enum Discovery {
     }
 
     #if os(Windows)
-        /// Windows routes the limited broadcast correctly; macOS needs the directed broadcast for each
-        /// active interface instead.
+        /// Windows routes the limited broadcast correctly; macOS needs the directed broadcast for
+        /// each active interface instead.
         private static func resolveLimitedBroadcast(port: UInt16) -> (bytes: [UInt8], len: Int)? {
             var hints = addrinfo()
             hints.ai_family = AF_INET

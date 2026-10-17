@@ -63,8 +63,8 @@ import Testing
     #expect(clipboard.writtenTexts == ["first", "second"])
 }
 
-/// Failure story: if the receiver applies a transfer but its acknowledgement is lost, retrying
-/// must not replay that item over a subsequent local copy or create another history entry.
+/// Failure story: if the receiver applies a transfer but its acknowledgement is lost, retrying must
+/// not replay that item over a subsequent local copy or create another history entry.
 @Test func `lost acknowledgement does not replay over a newer local copy`() {
     let queue = TransferQueue()
     let clipboard = QueueTestClipboard()
