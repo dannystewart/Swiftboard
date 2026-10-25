@@ -20,9 +20,10 @@ Packages/
 !**/xcuserdata/*.xcuserdatad/Bookmarks/bookmarks.plist
 **/UserInterfaceState.xcuserstate
 
-# Generated configuration
+# Project configuration
 Config/BuildNumber.xcconfig
 Config/Secrets.xcconfig
+Config/PolyLog.json
 
 # Development tools
 .claude/
