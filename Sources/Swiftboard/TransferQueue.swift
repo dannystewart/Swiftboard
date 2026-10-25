@@ -1,5 +1,6 @@
 import Dispatch
 import Foundation
+import PolyLog
 import Synchronization
 
 // MARK: - TransferQueue
@@ -30,7 +31,7 @@ final class TransferQueue: Sendable {
             return entries.count
         }
         if count == 1 { self.wake.signal() }
-        Log.info("Queued \(item.summary); \(count) update(s) pending.")
+        logger.info("Queued \(item.summary); \(count) update(s) pending.")
     }
 
     /// Sleep only when idle. A new capture wakes the worker immediately, without making capture

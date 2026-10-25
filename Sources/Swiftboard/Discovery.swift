@@ -1,4 +1,5 @@
 import Foundation
+import PolyLog
 import Synchronization
 
 #if os(Windows)
@@ -128,17 +129,17 @@ enum Discovery {
         let myID = UUID().uuidString
 
         guard let fd = makeSocket(port: port) else {
-            Log.error("Discovery socket setup failed; auto-discovery unavailable. Pass a peer address instead.")
+            logger.error("Discovery socket setup failed; auto-discovery unavailable. Pass a peer address instead.")
             return false
         }
         let destinations = self.resolveBroadcasts(port: port)
         guard !destinations.isEmpty else {
             Sock.close(fd)
-            Log.error("Could not resolve a discovery broadcast address.")
+            logger.error("Could not resolve a discovery broadcast address.")
             return false
         }
 
-        Log.info("Auto-discovery active: broadcasting on UDP port \(port).")
+        logger.info("Auto-discovery active: broadcasting on UDP port \(port).")
         Thread.detachNewThread { self.listenLoop(fd: fd, myID: myID, registry: registry) }
         Thread.detachNewThread { self.broadcastLoop(fd: fd, destinations: destinations, myID: myID) }
         Thread.detachNewThread { self.livenessLoop(registry: registry) }
@@ -149,7 +150,7 @@ enum Discovery {
         while true {
             Thread.sleep(forTimeInterval: 2)
             if registry.markStaleIfNeeded(timeout: self.livenessTimeout) {
-                Log.info("Peer went offline (no beacon for \(Int(self.livenessTimeout))s).")
+                logger.info("Peer went offline (no beacon for \(Int(self.livenessTimeout))s).")
             }
         }
     }
@@ -191,18 +192,16 @@ enum Discovery {
         var failureLogged = false
         while true {
             var sent = false
-            for destination in destinations {
-                if self.sendBeacon(fd: fd, message: message, dest: destination) {
-                    sent = true
-                }
+            for destination in destinations where self.sendBeacon(fd: fd, message: message, dest: destination) {
+                sent = true
             }
             if sent {
                 if failureLogged {
-                    Log.info("Discovery broadcasts resumed.")
+                    logger.info("Discovery broadcasts resumed.")
                     failureLogged = false
                 }
             } else if !failureLogged {
-                Log.warn("Discovery broadcast failed with OS error \(Sock.lastErrorCode()); will keep retrying.")
+                logger.warning("Discovery broadcast failed with OS error \(Sock.lastErrorCode()); will keep retrying.")
                 failureLogged = true
             }
             Thread.sleep(forTimeInterval: self.interval)
@@ -313,8 +312,11 @@ enum Discovery {
                 continue
             }
 
-            let text = String(decoding: buffer[0 ..< received], as: UTF8.self)
-            guard let beacon = self.parseBeacon(text), beacon.id != myID else {
+            guard
+                let text = String(bytes: buffer[0 ..< received], encoding: .utf8),
+                let beacon = self.parseBeacon(text),
+                beacon.id != myID else
+            {
                 continue
             }
 
@@ -324,7 +326,7 @@ enum Discovery {
                 let destination = (bytes: Array(from.prefix(fromLength)), len: fromLength)
                 let reply = Array((self.replyPrefix + myID).utf8)
                 if !self.sendBeacon(fd: fd, message: reply, dest: destination) {
-                    Log.debug("Discovery reply failed with OS error \(Sock.lastErrorCode()).")
+                    logger.debug("Discovery reply failed with OS error \(Sock.lastErrorCode()).")
                 }
             }
 
@@ -334,11 +336,11 @@ enum Discovery {
             let ip = "\(from[4]).\(from[5]).\(from[6]).\(from[7])"
             switch registry.markSeen(ip) {
             case .discovered:
-                Log.info("Discovered peer at \(ip).")
+                logger.info("Discovered peer at \(ip).")
             case .reconnected:
-                Log.info("Peer back online at \(ip).")
+                logger.info("Peer back online at \(ip).")
             case .stillPresent:
-                Log.debug("Heartbeat from \(ip).")
+                logger.debug("Heartbeat from \(ip).")
             }
         }
     }

@@ -1,6 +1,7 @@
 #if os(Windows)
     import CSTBImage
     import Foundation
+    import PolyLog
     import WinSDK
 
     // NOTE: This file only compiles on Windows and has NOT been build-verified on a Windows
@@ -23,14 +24,14 @@
 
         func read(maxBytes: Int, syncImages: Bool) -> ClipboardItem? {
             guard self.openClipboardWithRetry() else {
-                Log.debug("Clipboard was busy; skipping this read.")
+                logger.debug("Clipboard was busy; skipping this read.")
                 return nil
             }
             defer { CloseClipboard() }
 
             if syncImages, let png = readImagePNG() {
                 guard png.count <= maxBytes else {
-                    Log.warn("Clipboard image too large (\(png.count) bytes); skipping.")
+                    logger.warning("Clipboard image too large (\(png.count) bytes); skipping.")
                     return nil
                 }
                 return .image(png: png)
@@ -38,7 +39,7 @@
 
             if let text = readUnicodeText(), !text.isEmpty {
                 guard text.utf8.count <= maxBytes else {
-                    Log.warn("Clipboard text too large (\(text.utf8.count) bytes); skipping.")
+                    logger.warning("Clipboard text too large (\(text.utf8.count) bytes); skipping.")
                     return nil
                 }
                 return .text(text)
@@ -49,13 +50,13 @@
 
         func write(_ item: ClipboardItem) -> Bool {
             guard self.openClipboardWithRetry() else {
-                Log.warn("Could not open clipboard to write; sender will retry.")
+                logger.warning("Could not open clipboard to write; sender will retry.")
                 return false
             }
             defer { CloseClipboard() }
 
             guard EmptyClipboard() else {
-                Log.warn("EmptyClipboard failed; sender will retry.")
+                logger.warning("EmptyClipboard failed; sender will retry.")
                 return false
             }
 
@@ -202,7 +203,7 @@
                 )
             }
             guard let rgba, width > 0, height > 0 else {
-                Log.warn("Failed to decode incoming PNG for clipboard write.")
+                logger.warning("Failed to decode incoming PNG for clipboard write.")
                 return false
             }
             defer { cstb_free(rgba) }

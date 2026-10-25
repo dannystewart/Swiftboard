@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1E0EB823084EEEB00B5E068 /* PolyLog in Frameworks */ = {isa = PBXBuildFile; productRef = A1E0EB813084EEEB00B5E068 /* PolyLog */; };
 		301E886D3027A8DF0007C1CD /* SwiftboardIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 301E886C3027A8DF0007C1CD /* SwiftboardIcon.icon */; };
 /* End PBXBuildFile section */
 
@@ -49,6 +50,7 @@
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				A1E0EB823084EEEB00B5E068 /* PolyLog in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -92,6 +94,9 @@
 				000000000000000000000011 /* Swiftboard Sources */,
 			);
 			name = Swiftboard;
+			packageProductDependencies = (
+				A1E0EB813084EEEB00B5E068 /* PolyLog */,
+			);
 			productName = Swiftboard;
 			productReference = 000000000000000000000120 /* Swiftboard.app */;
 			productType = "com.apple.product-type.application";
@@ -120,6 +125,9 @@
 			);
 			mainGroup = 000000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A1E0EB803084EEEB00B5E068 /* XCRemoteSwiftPackageReference "polylog-swift" */,
+			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
 			projectDirPath = "";
@@ -368,6 +376,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1E0EB803084EEEB00B5E068 /* XCRemoteSwiftPackageReference "polylog-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/dannystewart/polylog-swift.git";
+			requirement = {
+				kind = revision;
+				revision = 7995922bd2c2829ddbcaa9ec84691416d31523ae;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1E0EB813084EEEB00B5E068 /* PolyLog */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1E0EB803084EEEB00B5E068 /* XCRemoteSwiftPackageReference "polylog-swift" */;
+			productName = PolyLog;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 000000000000000000000000 /* Project object */;
 }

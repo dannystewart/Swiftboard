@@ -1,4 +1,5 @@
 import Foundation
+import PolyLog
 
 @main
 struct Swiftboard {
@@ -15,21 +16,14 @@ struct Swiftboard {
             exit(2)
         }
 
-        if config.verbose {
-            Log.minLevel = .debug
-        }
-
-        // Do this first: the headless Windows build has no console, so the file is the only place
-        // logs can land.
-        if let logPath = Log.startFileLogging() {
-            Log.info("Logging to \(logPath).")
-        }
-        Log.info("Swiftboard process starting (PID \(ProcessInfo.processInfo.processIdentifier)).")
+        SwiftboardLogging.start(verbose: config.verbose)
+        logger.info("Swiftboard process starting (PID \(ProcessInfo.processInfo.processIdentifier)).")
 
         do {
             _ = try SwiftboardService(config: config)
         } catch {
-            Log.error("\(error) Exiting for supervisor restart.")
+            logger.error("\(error) Exiting for supervisor restart.")
+            SwiftboardLogging.shutdownAndWait()
             exit(1)
         }
 

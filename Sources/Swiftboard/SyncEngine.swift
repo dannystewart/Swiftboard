@@ -1,4 +1,5 @@
 import Foundation
+import PolyLog
 import Synchronization
 
 /// Coordinates the local clipboard, the peer transport, and the dedup state.
@@ -48,11 +49,11 @@ final class SyncEngine: Sendable {
             // Don't overwrite a local copy made since the last poll without first saving it.
             self.captureLocal(state: &s)
             if let existing = s.lastHash, existing == item.hash {
-                Log.debug("Ignoring peer update; identical content already present.")
+                logger.debug("Ignoring peer update; identical content already present.")
                 return true
             }
 
-            Log.info("Received \(item.summary) from peer; updating local clipboard.")
+            logger.info("Received \(item.summary) from peer; updating local clipboard.")
             guard self.backend.write(item) else {
                 // A failed write can still clear/change the clipboard. Don't echo partial state.
                 s.lastToken = self.backend.changeToken()

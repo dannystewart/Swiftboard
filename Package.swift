@@ -17,6 +17,9 @@ let package = Package(
     products: [
         .executable(name: "swiftboard", targets: ["Swiftboard"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/dannystewart/polylog-swift.git", revision: "7995922bd2c2829ddbcaa9ec84691416d31523ae"),
+    ],
     targets: [
         // C shim over stb_image / stb_image_write, used only on Windows to convert between the
         // clipboard's DIB and the PNG we send on the wire. macOS uses NSBitmapImageRep instead, so
@@ -25,6 +28,7 @@ let package = Package(
         .executableTarget(
             name: "Swiftboard",
             dependencies: [
+                .product(name: "PolyLog", package: "polylog-swift"),
                 .target(name: "CSTBImage", condition: .when(platforms: [.windows])),
             ],
             exclude: ["Info.plist"],

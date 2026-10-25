@@ -1,4 +1,7 @@
 import AppKit
+import PolyLog
+
+// MARK: - SwiftboardApp
 
 @main
 enum SwiftboardApp {
@@ -8,20 +11,38 @@ enum SwiftboardApp {
             config.peerHost = peer
         }
 
-        if let logPath = Log.startFileLogging() {
-            Log.info("Logging to \(logPath).")
-        }
-        Log.info("Swiftboard app starting (PID \(ProcessInfo.processInfo.processIdentifier)).")
+        SwiftboardLogging.start()
+        logger.info("Swiftboard app starting (PID \(ProcessInfo.processInfo.processIdentifier)).")
 
         do {
             _ = try SwiftboardService(config: config)
         } catch {
-            Log.error("\(error) Exiting for launchd restart.")
-            exit(1)
+            logger.error("\(error) Exiting for launchd restart.")
+            Task {
+                await SwiftboardLogging.shutdown()
+                exit(1)
+            }
+            RunLoop.main.run()
+            return
         }
 
         let application = NSApplication.shared
+        let delegate = SwiftboardAppDelegate()
+        application.delegate = delegate
         application.setActivationPolicy(.accessory)
-        application.run()
+        withExtendedLifetime(delegate) { application.run() }
+    }
+}
+
+// MARK: - SwiftboardAppDelegate
+
+@MainActor
+private final class SwiftboardAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        Task {
+            await SwiftboardLogging.shutdown()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }

@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "serverURL": "https://PROJECT_REF.supabase.co",
+  "publishableKey": "POLYLOGS_PUBLISHABLE_OR_ANON_KEY",
+  "ingestToken": "SWIFTBOARD_INGEST_TOKEN"
+}

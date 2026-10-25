@@ -1,4 +1,5 @@
 import Foundation
+import PolyLog
 
 // MARK: - SwiftboardServiceError
 
@@ -27,12 +28,12 @@ final class SwiftboardService {
         guard let listener = Transport.makeListener(port: port) else {
             throw SwiftboardServiceError.listener(port)
         }
-        Log.info("Listening for peer clipboard updates on port \(port).")
+        logger.info("Listening for peer clipboard updates on port \(port).")
 
         let registry = PeerRegistry()
         if let staticPeer = config.peerHost {
             registry.setStatic(staticPeer)
-            Log.info("Using static peer \(staticPeer):\(port).")
+            logger.info("Using static peer \(staticPeer):\(port).")
         } else if !Discovery.start(port: port, registry: registry) {
             throw SwiftboardServiceError.discovery
         }
@@ -44,7 +45,7 @@ final class SwiftboardService {
         }
         self.engine = engine
 
-        Log.info("Swiftboard ready on port \(port), images \(config.syncImages ? "on" : "off").")
+        logger.info("Swiftboard ready on port \(port), images \(config.syncImages ? "on" : "off").")
 
         let interval = Double(config.pollIntervalMS) / 1000.0
         Thread.detachNewThread {
@@ -74,9 +75,9 @@ final class SwiftboardService {
                 if config.peerHost == nil {
                     switch registry.markSeen(peerHost) {
                     case .discovered:
-                        Log.info("Learned peer at \(peerHost) from incoming TCP update.")
+                        logger.info("Learned peer at \(peerHost) from incoming TCP update.")
                     case .reconnected:
-                        Log.info("Peer back online at \(peerHost) from incoming TCP update.")
+                        logger.info("Peer back online at \(peerHost) from incoming TCP update.")
                     case .stillPresent:
                         break
                     }

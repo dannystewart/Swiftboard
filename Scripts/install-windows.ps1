@@ -75,9 +75,29 @@ try {
     Pop-Location
 }
 
+$logConfigSource = Join-Path $repoDirectory "Config\PolyLog.json"
+if (Test-Path $logConfigSource) {
+    $logSettings = Get-Content $logConfigSource -Raw | ConvertFrom-Json
+    if ($logSettings.enabled -isnot [bool] -or -not $logSettings.serverURL -or -not $logSettings.publishableKey -or -not $logSettings.ingestToken) {
+        throw "Config\PolyLog.json must contain enabled, serverURL, publishableKey, and ingestToken."
+    }
+}
+
 Stop-Swiftboard
 New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
 Copy-Item (Join-Path $binDirectory "swiftboard.exe") $executable -Force
+
+# Restrict access before writing credentials; preserve installed settings when absent.
+if (Test-Path $logConfigSource) {
+    $logConfig = Join-Path $installDirectory "polylog.json"
+    if (-not (Test-Path $logConfig)) { New-Item -ItemType File -Path $logConfig | Out-Null }
+    $acl = Get-Acl $logConfig
+    $acl.SetAccessRuleProtection($true, $false)
+    $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $acl.SetAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($user, 'FullControl', 'Allow'))
+    Set-Acl $logConfig $acl
+    [System.IO.File]::WriteAllText($logConfig, ($logSettings | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
+}
 
 Remove-NetFirewallRule -Name $tcpFirewallRule -ErrorAction SilentlyContinue
 Remove-NetFirewallRule -Name $udpFirewallRule -ErrorAction SilentlyContinue

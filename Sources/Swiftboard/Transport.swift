@@ -1,4 +1,5 @@
 import Foundation
+import PolyLog
 
 #if os(Windows)
     import WinSDK
@@ -35,7 +36,7 @@ enum Transport {
                 return accept(listener, address, &addressLength)
             }
             if clientFD == invalidSocketFD {
-                Log.debug("accept() failed; continuing.")
+                logger.debug("accept() failed; continuing.")
                 continue
             }
             guard addressLength >= 8 else {
@@ -71,12 +72,12 @@ enum Transport {
                     connection.error == EHOSTUNREACH,
                     self.sendFrameWithSystemNetcat(to: host, port: port, frame: frame)
                 {
-                    Log.info("Sent \(payload.count)-byte frame to \(host):\(port) using the macOS system transport.")
+                    logger.info("Sent \(payload.count)-byte frame to \(host):\(port) using the macOS system transport.")
                     return true
                 }
             #endif // os(macOS)
             if let error = connection.error {
-                Log.warn(
+                logger.warning(
                     "Could not connect to peer \(host):\(port) (OS error \(error)); update remains queued.",
                 )
             }
@@ -85,10 +86,10 @@ enum Transport {
         defer { Sock.close(fd) }
 
         if self.sendAll(fd, frame), self.recvExactly(fd, count: 1) == [6] {
-            Log.info("Peer acknowledged \(payload.count)-byte frame at \(host):\(port).")
+            logger.info("Peer acknowledged \(payload.count)-byte frame at \(host):\(port).")
             return true
         } else {
-            Log.warn("Transfer to \(host):\(port) was not acknowledged; update remains queued.")
+            logger.warning("Transfer to \(host):\(port) was not acknowledged; update remains queued.")
             return false
         }
     }
@@ -104,20 +105,20 @@ enum Transport {
         let length =
             (Int(header[0]) << 24) | (Int(header[1]) << 16) | (Int(header[2]) << 8) | Int(header[3])
         guard length > 0, length <= maxFrameBytes else {
-            Log.warn("Rejecting frame with implausible length \(length).")
+            logger.warning("Rejecting frame with implausible length \(length).")
             return
         }
         #if os(macOS)
             let receiveStarted = ProcessInfo.processInfo.systemUptime
         #endif
         guard let body = recvExactly(fd, count: length) else {
-            Log.debug("Connection closed before full frame arrived.")
+            logger.debug("Connection closed before full frame arrived.")
             return
         }
         #if os(macOS)
             if body.first == 0 || (body.first == 1 && body.count > 37 && body[37] == 0) {
                 let seconds = ProcessInfo.processInfo.systemUptime - receiveStarted
-                Log.info("Received \(length)-byte image frame in \(String(format: "%.3f", seconds))s over TCP.")
+                logger.info("Received \(length)-byte image frame in \(String(format: "%.3f", seconds))s over TCP.")
             }
         #endif
         if onReceive(Data(body)) {
@@ -170,7 +171,7 @@ enum Transport {
         var result: UnsafeMutablePointer<addrinfo>?
         let resolveResult = getaddrinfo(host, String(port), &hints, &result)
         guard resolveResult == 0, let info = result else {
-            Log.warn(
+            logger.warning(
                 "Could not resolve peer \(host):\(port) (getaddrinfo error \(resolveResult)); update not delivered.",
             )
             return (nil, nil)
@@ -195,7 +196,7 @@ enum Transport {
             candidate = address.ai_next
         }
         if lastError == nil {
-            Log.warn("Could not connect to peer \(host):\(port); update not delivered.")
+            logger.warning("Could not connect to peer \(host):\(port); update not delivered.")
         }
         return (nil, lastError)
     }

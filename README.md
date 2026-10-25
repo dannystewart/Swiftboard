@@ -9,7 +9,7 @@ A small cross-platform clipboard agent that keeps two machines on the same LAN i
 - **Auto-discovery** over UDP broadcast — no need to know the other machine's IP.
 - **Liveness reporting** — logs when the peer goes offline and comes back.
 - **No echo / ping-pong** — an update received from the peer is never bounced back.
-- **No third-party dependencies** — just the Swift toolchain (plus a vendored C image codec on Windows).
+- **Lightweight dependencies** — standalone PolyLog for logging, plus a vendored C image codec on Windows.
 
 ## How it works
 
@@ -111,6 +111,43 @@ sh ./Scripts/install-macos.sh 192.168.1.50
 Run the same script with `-Uninstall` on Windows or `--uninstall` on macOS to stop and remove Swiftboard.
 
 Logs are written to `%LOCALAPPDATA%\Swiftboard\swiftboard.log` on Windows and `~/Library/Logs/swiftboard.log` on macOS. Startup is fail-fast: if Swiftboard cannot initialize its TCP listener or discovery socket, it exits so the OS supervisor can retry instead of leaving a partially working process behind.
+
+### Remote logging with PolyLog
+
+Both the Swift package executable and the macOS app use [polylog-swift](https://github.com/dannystewart/polylog-swift),
+pinned to revision `7995922bd2c2829ddbcaa9ec84691416d31523ae`. Like Splitbrain, remote delivery is
+optional in both Debug and Release and does not replace the existing local log files.
+
+Copy `Config/PolyLog.template.json` to the ignored `Config/PolyLog.json`. Supply the PolyLogs
+destination URL, its public publishable/anon key, and an enabled ingest token registered for the
+exact app ID **`com.dannystewart.swiftboard`**. Splitbrain's token cannot be reused. Never use a
+service-role/secret key. Follow the package's [remote setup](https://github.com/dannystewart/polylog-swift/blob/main/Documentation/RemoteStreaming.md)
+and [token provisioning](https://github.com/dannystewart/polylog-swift/blob/main/Documentation/IngestTokens.md)
+guides for registration; creating a configuration file alone does not authorize ingestion.
+
+The installers copy this private configuration outside the executable/bundle to:
+
+- macOS: `~/Library/Application Support/Swiftboard/polylog.json` (mode `600`).
+- Windows: `%LOCALAPPDATA%\Swiftboard\polylog.json` (current-user ACL).
+
+Direct CLI/Xcode launches read the same installed paths; they do not read the repository copy.
+Updates preserve installed settings when `Config/PolyLog.json` is absent. Set `enabled` to `false`
+in the installed file and restart to disable remote delivery. Missing, disabled, or invalid settings
+leave local logging available. Configuration failures are reported without exposing credentials;
+upload retries remain silent.
+
+The sibling `installation-id` file persists a logging-only device UUID across launches. Keep it
+with its sibling `PolyLog` outbox, which owns disk-backed replay after restarts, bounded by the
+package's storage and retention limits. Only one running instance may own that outbox. Remote
+uploads use HTTPS independently of the peer clipboard connection; ingestion failures do not block
+clipboard sync. `--verbose` controls only local debug output; configured remote delivery includes
+debug events in Release too. Logs include transfer types/sizes, network endpoints, device/OS
+metadata, and operational errors, **not clipboard text, image data, or content hashes**.
+
+Graceful Mac app termination and startup-failure exits attempt a bounded remote shutdown. Forced
+termination can lose events not yet persisted; existing outbox files replay on the next launch.
+The macOS uninstall script removes Application Support (including logging settings, identity, and
+pending outbox); the Windows uninstaller retains these files alongside local logs.
 
 The Xcode target uses automatic signing with the development team configured in the project. For distribution to another Mac, select a Developer ID Application certificate and archive/notarize the app in Xcode; the runtime and installer layout do not otherwise change.
 

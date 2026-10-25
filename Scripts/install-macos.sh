@@ -64,6 +64,10 @@ repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 derived_data="$repo_dir/.build/xcode-install"
 built_app="$derived_data/Build/Products/Release/Swiftboard.app"
 
+# Validate optional private logging settings before stopping the installed app.
+log_config="$repo_dir/Config/PolyLog.json"
+if [ -f "$log_config" ]; then python3 -m json.tool "$log_config" >/dev/null 2>&1; fi
+
 printf 'Building and signing Swiftboard.app...\n'
 xcodebuild \
     -project "$repo_dir/Swiftboard.xcodeproj" \
@@ -77,6 +81,13 @@ stop_swiftboard
 rm -rf "$app"
 /usr/bin/ditto "$built_app" "$app"
 codesign --verify --deep --strict "$app"
+
+# Keep credentials outside the signed bundle; omission preserves installed settings.
+if [ -f "$log_config" ]; then
+    log_dir="$HOME/Library/Application Support/Swiftboard"
+    mkdir -p "$log_dir"
+    install -m 600 "$log_config" "$log_dir/polylog.json"
+fi
 
 if [ -n "$peer" ]; then
     defaults write "$label" peer -string "$peer"

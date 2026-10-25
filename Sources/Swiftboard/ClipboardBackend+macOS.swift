@@ -1,6 +1,7 @@
 #if os(macOS)
     import AppKit
     import Foundation
+    import PolyLog
 
     struct MacClipboardBackend: ClipboardBackend {
         func changeToken() -> Int {
@@ -12,7 +13,7 @@
 
             if syncImages, let png = readImagePNG(pb) {
                 guard png.count <= maxBytes else {
-                    Log.warn("Clipboard image too large (\(png.count) bytes); skipping.")
+                    logger.warning("Clipboard image too large (\(png.count) bytes); skipping.")
                     return nil
                 }
                 return .image(png: png)
@@ -20,7 +21,7 @@
 
             if let text = pb.string(forType: .string), !text.isEmpty {
                 guard text.utf8.count <= maxBytes else {
-                    Log.warn("Clipboard text too large (\(text.utf8.count) bytes); skipping.")
+                    logger.warning("Clipboard text too large (\(text.utf8.count) bytes); skipping.")
                     return nil
                 }
                 return .text(text)

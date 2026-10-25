@@ -1,0 +1,14 @@
+{
+  "originHash" : "670303a1917664aeed6a1561007538ec264f1690944447a5b8ce51e851bbe90a",
+  "pins" : [
+    {
+      "identity" : "polylog-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/dannystewart/polylog-swift.git",
+      "state" : {
+        "revision" : "7995922bd2c2829ddbcaa9ec84691416d31523ae"
+      }
+    }
+  ],
+  "version" : 3
+}
