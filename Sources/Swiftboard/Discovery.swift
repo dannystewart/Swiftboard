@@ -340,7 +340,7 @@ enum Discovery {
             case .reconnected:
                 logger.info("Peer back online at \(ip).")
             case .stillPresent:
-                logger.debug("Heartbeat from \(ip).")
+                break
             }
         }
     }

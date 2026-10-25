@@ -60,7 +60,7 @@ swiftboard 192.168.1.50
 
 - `[peer]` — IP or hostname of the other machine. Omit to auto-discover.
 - `--port <n>` — TCP/UDP port to use (default: `8765`).
-- `--verbose` — debug logging, including discovery heartbeats.
+- `--verbose` — debug logging. Routine discovery heartbeats are not logged.
 - `-h`, `--help` — usage.
 
 A few values are fixed in code rather than exposed as flags (see `Config.swift`): max payload size (100 MiB), poll interval (250 ms), and whether images sync. The high payload ceiling accommodates large, high-resolution PNG screenshots while retaining a defensive bound on incoming network frames.
