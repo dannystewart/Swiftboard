@@ -155,11 +155,7 @@ enum Transport {
         #endif // os(Windows)
 
         let bindResult = bind(fd, info.pointee.ai_addr, Sock.addrLen(info.pointee.ai_addrlen))
-        guard bindResult == 0 else {
-            Sock.close(fd)
-            return nil
-        }
-        guard listen(fd, 8) == 0 else {
+        guard bindResult == 0, listen(fd, 8) == 0 else {
             Sock.close(fd)
             return nil
         }

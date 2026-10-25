@@ -46,8 +46,7 @@ final class TransferQueue: Sendable {
     @discardableResult
     func deliverNext(using send: (Entry) -> Bool) -> Bool {
         self.delivery.withLock { _ in
-            guard let entry = self.entries.withLock({ $0.first }) else { return false }
-            guard send(entry) else { return false }
+            guard let entry = self.entries.withLock({ $0.first }), send(entry) else { return false }
             _ = self.entries.withLock { $0.removeFirst() }
             return true
         }

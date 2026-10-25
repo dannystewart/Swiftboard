@@ -87,9 +87,10 @@
         // MARK: - Text
 
         private func readUnicodeText() -> String? {
-            guard IsClipboardFormatAvailable(cfUnicodeText) else { return nil }
-            guard let handle = GetClipboardData(cfUnicodeText) else { return nil }
-            guard let locked = GlobalLock(handle) else { return nil }
+            guard
+                IsClipboardFormatAvailable(cfUnicodeText),
+                let handle = GetClipboardData(cfUnicodeText),
+                let locked = GlobalLock(handle) else { return nil }
             defer { GlobalUnlock(handle) }
             let ptr = locked.assumingMemoryBound(to: UInt16.self)
             return String(decodingCString: ptr, as: UTF16.self)

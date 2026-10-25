@@ -64,7 +64,8 @@ final class PeerRegistry: Sendable {
     func markStaleIfNeeded(timeout: TimeInterval) -> Bool {
         self.state.withLock { state in
             guard
-                state.online, let last = state.lastSeen,
+                state.online,
+                let last = state.lastSeen,
                 Date().timeIntervalSince(last) > timeout else
             {
                 return false
@@ -170,13 +171,9 @@ enum Discovery {
 
         guard
             Sock.enableBoolOption(fd, SO_REUSEADDR),
-            Sock.enableBoolOption(fd, SO_BROADCAST) else
+            Sock.enableBoolOption(fd, SO_BROADCAST),
+            bind(fd, info.pointee.ai_addr, Sock.addrLen(info.pointee.ai_addrlen)) == 0 else
         {
-            Sock.close(fd)
-            return nil
-        }
-
-        guard bind(fd, info.pointee.ai_addr, Sock.addrLen(info.pointee.ai_addrlen)) == 0 else {
             Sock.close(fd)
             return nil
         }
@@ -236,9 +233,8 @@ enum Discovery {
                 let length = MemoryLayout<sockaddr_in>.size
                 let addressBytes = UnsafeRawBufferPointer(start: address, count: length)
                 let maskBytes = UnsafeRawBufferPointer(start: netmask, count: length)
-                guard addressBytes[4] != 127 else { continue }
-
                 guard
+                    addressBytes[4] != 127,
                     let bytes = self.directedBroadcast(
                         address: addressBytes,
                         netmask: maskBytes,
@@ -261,7 +257,8 @@ enum Discovery {
             var result: UnsafeMutablePointer<addrinfo>?
             guard
                 getaddrinfo("255.255.255.255", String(port), &hints, &result) == 0,
-                let info = result, let addr = info.pointee.ai_addr else
+                let info = result,
+                let addr = info.pointee.ai_addr else
             {
                 return nil
             }
