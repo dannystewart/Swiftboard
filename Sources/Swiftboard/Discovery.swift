@@ -281,14 +281,14 @@ enum Discovery {
             let sa = addrRaw.baseAddress!.assumingMemoryBound(to: sockaddr.self)
             return message.withUnsafeBytes { msgRaw in
                 #if os(Windows)
-                    return sendto(fd,
-                                  msgRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
-                                  Int32(msgRaw.count),
-                                  0,
-                                  sa,
-                                  Int32(dest.len)) >= 0
+                    sendto(fd,
+                           msgRaw.baseAddress!.assumingMemoryBound(to: CChar.self),
+                           Int32(msgRaw.count),
+                           0,
+                           sa,
+                           Int32(dest.len)) >= 0
                 #else
-                    return sendto(fd, msgRaw.baseAddress, msgRaw.count, 0, sa, socklen_t(dest.len)) >= 0
+                    sendto(fd, msgRaw.baseAddress, msgRaw.count, 0, sa, socklen_t(dest.len)) >= 0
                 #endif // os(Windows)
             }
         }

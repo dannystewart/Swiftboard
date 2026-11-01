@@ -28,7 +28,10 @@ enum SwiftboardLogging {
         _ = logger
         do {
             #if os(Windows)
-                guard let base = ProcessInfo.processInfo.environment["LOCALAPPDATA"], !base.isEmpty else {
+                guard
+                    let base = ProcessInfo.processInfo.environment["LOCALAPPDATA"],
+                    !base.isEmpty else
+                {
                     throw CocoaError(.fileNoSuchFile)
                 }
                 let directory = URL(fileURLWithPath: base)
@@ -39,7 +42,7 @@ enum SwiftboardLogging {
                     .homeDirectoryForCurrentUser
                     .appendingPathComponent("Library/Application Support/Swiftboard", isDirectory: true)
                 let osName = "macOS"
-            #endif
+            #endif // os(Windows)
             let config = directory.appendingPathComponent("polylog.json")
             if FileManager.default.fileExists(atPath: config.path) {
                 let settings = try JSONDecoder().decode(Settings.self, from: Data(contentsOf: config))
@@ -81,7 +84,8 @@ enum SwiftboardLogging {
         _ = finished.wait(timeout: .now() + 1.5)
     }
 
-    /// A logging-only installation identity; discovery's per-process UUID is intentionally separate.
+    /// A logging-only installation identity; discovery's per-process UUID is intentionally
+    /// separate.
     private static func installationID(in directory: URL) throws -> String {
         let url = directory.appendingPathComponent("installation-id")
         if FileManager.default.fileExists(atPath: url.path) {

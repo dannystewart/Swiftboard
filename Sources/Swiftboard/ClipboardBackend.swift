@@ -26,9 +26,9 @@ protocol ClipboardBackend: Sendable {
 enum ClipboardBackendFactory {
     static func make() -> any ClipboardBackend {
         #if os(macOS)
-            return MacClipboardBackend()
+            MacClipboardBackend()
         #elseif os(Windows)
-            return WindowsClipboardBackend()
+            WindowsClipboardBackend()
         #else
             fatalError("Swiftboard supports macOS and Windows only.")
         #endif // os(macOS)
