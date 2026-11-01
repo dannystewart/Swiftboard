@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "2700"
+   LastUpgradeVersion = "2720"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -15,10 +15,10 @@
                <EnvironmentBuildable>
                   <BuildableReference
                      BuildableIdentifier = "primary"
-                      BlueprintIdentifier = "000000000000000100000000"
-                      BuildableName = "Swiftboard.app"
-                      BlueprintName = "Swiftboard"
-                      ReferencedContainer = "container:Swiftboard.xcodeproj">
+                     BlueprintIdentifier = "000000000000000100000000"
+                     BuildableName = "Swiftboard.app"
+                     BlueprintName = "Swiftboard"
+                     ReferencedContainer = "container:Swiftboard.xcodeproj">
                   </BuildableReference>
                </EnvironmentBuildable>
             </ActionContent>
@@ -33,10 +33,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-                BlueprintIdentifier = "000000000000000100000000"
-                BuildableName = "Swiftboard.app"
-                BlueprintName = "Swiftboard"
-                ReferencedContainer = "container:Swiftboard.xcodeproj">
+               BlueprintIdentifier = "000000000000000100000000"
+               BuildableName = "Swiftboard.app"
+               BlueprintName = "Swiftboard"
+               ReferencedContainer = "container:Swiftboard.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -46,6 +46,8 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
+      <Testables>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -58,13 +60,14 @@
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES"
       queueDebuggingEnabled = "No">
-      <BuildableProductRunnable runnableDebuggingMode = "0">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-             BlueprintIdentifier = "000000000000000100000000"
-             BuildableName = "Swiftboard.app"
-             BlueprintName = "Swiftboard"
-             ReferencedContainer = "container:Swiftboard.xcodeproj">
+            BlueprintIdentifier = "000000000000000100000000"
+            BuildableName = "Swiftboard.app"
+            BlueprintName = "Swiftboard"
+            ReferencedContainer = "container:Swiftboard.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -74,17 +77,19 @@
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
-      <BuildableProductRunnable runnableDebuggingMode = "0">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-             BlueprintIdentifier = "000000000000000100000000"
-             BuildableName = "Swiftboard.app"
-             BlueprintName = "Swiftboard"
-             ReferencedContainer = "container:Swiftboard.xcodeproj">
+            BlueprintIdentifier = "000000000000000100000000"
+            BuildableName = "Swiftboard.app"
+            BlueprintName = "Swiftboard"
+            ReferencedContainer = "container:Swiftboard.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
-   <AnalyzeAction buildConfiguration = "Debug">
+   <AnalyzeAction
+      buildConfiguration = "Debug">
    </AnalyzeAction>
    <ArchiveAction
       buildConfiguration = "Release"
