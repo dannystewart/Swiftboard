@@ -26,6 +26,12 @@ final class TransferQueue: Sendable {
     private let wake: DispatchSemaphore = .init(value: 0)
 
     func enqueue(_ item: ClipboardItem) {
+        // A permanently undeliverable head would block every subsequent copy. Do not admit empty
+        // snapshots even if a backend other than the normal capture path supplies one.
+        guard item.byteCount > 0 else {
+            logger.warning("Ignoring empty clipboard snapshot; update was not queued.")
+            return
+        }
         let count = self.entries.withLock { entries in
             entries.append(Entry(item: item))
             return entries.count

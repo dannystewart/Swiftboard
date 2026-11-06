@@ -85,6 +85,51 @@ import Testing
     #expect(clipboard.writtenTexts == ["from peer"])
 }
 
+/// Failure: a screenshot's initially empty PNG must not consume its clipboard change token. Path:
+/// moving token bookkeeping ahead of snapshot validation during capture cleanup would silently lose
+/// delayed provider data, even though ordinary copies (which increment the token) still work.
+@Test func `delayed image bytes are captured without another clipboard change`() {
+    let clipboard = QueueTestClipboard()
+    let queue = TransferQueue()
+    let engine = SyncEngine(backend: clipboard, config: Config()) { queue.enqueue($0) }
+    clipboard.copy(.image(png: Data()))
+    engine.pollLocal()
+
+    #expect(!queue.deliverNext { _ in Issue.record("Queued an unfinished screenshot"); return true })
+    let image = ClipboardItem.image(png: Data([137, 80, 78, 71]))
+    clipboard.publish(image)
+    engine.pollLocal()
+
+    let delivered = queue.deliverNext { entry in
+        #expect(entry.item.imagePNG == image.imagePNG)
+        return true
+    }
+    #expect(delivered)
+    engine.pollLocal()
+    #expect(!queue.deliverNext { _ in Issue.record("Captured the same screenshot twice"); return true })
+}
+
+/// Failure: the zero-byte image seen in PolyLogs blocked every later copy behind an unacknowledged
+/// head. Path: relying solely on platform capture validation when changing backend image handling
+/// leaves queue admission coupled to every producer and to a receiver that rejects empty images.
+@Test func `empty image cannot block delivery of a later valid copy`() {
+    let queue = TransferQueue()
+    var receiver = TransferReceiver()
+    queue.enqueue(.image(png: Data()))
+    queue.enqueue(.text("valid copy"))
+
+    var received = [String]()
+    #expect(queue.deliverNext { entry in
+        guard let payload = entry.payload else { return false }
+        return receiver.receive(payload, maxBytes: Config().maxSizeBytes) { item in
+            if let text = item.text { received.append(text) }
+            return true
+        }
+    })
+    #expect(received == ["valid copy"])
+    #expect(!queue.deliverNext { _ in Issue.record("Unexpected pending transfer"); return true })
+}
+
 // MARK: - QueueTestClipboard
 
 private final class QueueTestClipboard: ClipboardBackend, Sendable {
@@ -107,6 +152,8 @@ private final class QueueTestClipboard: ClipboardBackend, Sendable {
     }
 
     func failWrites(_ value: Bool) { self.state.withLock { $0.failWrites = value } }
+    // A delayed pasteboard provider supplies bytes without declaring another clipboard change.
+    func publish(_ item: ClipboardItem) { self.state.withLock { $0.item = item } }
     func changeToken() -> Int { self.state.withLock { $0.token } }
     func read(maxBytes _: Int, syncImages _: Bool) -> ClipboardItem? { self.state.withLock { $0.item } }
 

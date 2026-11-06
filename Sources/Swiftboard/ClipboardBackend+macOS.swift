@@ -12,6 +12,9 @@
             let pb = NSPasteboard.general
 
             if syncImages, let png = readImagePNG(pb) {
+                // Screenshot providers can publish the type before supplying its bytes. Leave the
+                // change uncaptured so the poller retries instead of queueing an empty image.
+                guard !png.isEmpty else { return nil }
                 guard png.count <= maxBytes else {
                     logger.warning("Clipboard image too large (\(png.count) bytes); skipping.")
                     return nil

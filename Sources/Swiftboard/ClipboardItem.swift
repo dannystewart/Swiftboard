@@ -112,7 +112,7 @@ enum ClipboardWireFormat {
         case .text:
             return try? JSONEncoder().encode(item)
         case .image:
-            guard let png = item.imagePNG else { return nil }
+            guard let png = item.imagePNG, !png.isEmpty else { return nil }
             var payload = Data(capacity: png.count + 1)
             payload.append(self.imageMarker)
             payload.append(png)

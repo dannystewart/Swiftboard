@@ -86,7 +86,8 @@ final class SyncEngine: Sendable {
             let item = backend.read(
                 maxBytes: config.maxSizeBytes,
                 syncImages: config.syncImages,
-            ) else
+            ),
+            item.byteCount > 0 else
         {
             // A busy clipboard or a screenshot still being published should be retried on the next
             // tick, not marked as captured.
